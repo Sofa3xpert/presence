@@ -38,6 +38,14 @@ def count_hidden(root: Path) -> int:
     return sum(1 for p in root.rglob("*") if hidden(p)) + (1 if hidden(root) else 0)
 
 
+def _ignored_by_fileprovider(path: Path) -> bool:
+    try:
+        out = subprocess.run(["xattr", str(path)], capture_output=True, text=True, check=False)
+    except FileNotFoundError:
+        return True  # no xattr tool: nothing we can do, don't loop on it
+    return "com.apple.fileprovider.ignore#P" in out.stdout
+
+
 def main() -> int:
     venv = Path(sys.prefix)
     site = Path(sysconfig.get_paths()["purelib"])
@@ -45,6 +53,15 @@ def main() -> int:
     problems = 0
 
     if UF_HIDDEN:
+        # Keep iCloud's file provider out of the venv altogether: without this,
+        # it keeps re-applying the hidden flag from its cloud-side metadata even
+        # after every file has been un-hidden. Harmless on any macOS venv.
+        if sys.platform == "darwin" and not _ignored_by_fileprovider(venv):
+            subprocess.run(
+                ["xattr", "-w", "com.apple.fileprovider.ignore#P", "1", str(venv)], check=False
+            )
+            print("iCloud file provider: told to ignore .venv (xattr set)")
+
         flagged = count_hidden(venv)
         hidden_pths = [p for p in site.glob("*.pth") if hidden(p)]
         if flagged:
@@ -53,13 +70,12 @@ def main() -> int:
                   f"({len(hidden_pths)} .pth — Python skips those)")
             subprocess.run(["chflags", "-R", "nohidden", str(venv)], check=False)
             left = count_hidden(venv)
-            print("  chflags -R nohidden .venv ->", "fixed" if left == 0 else f"{left} still hidden")
-            if str(venv).startswith(str(Path.home() / "Desktop")) or str(venv).startswith(
-                str(Path.home() / "Documents")
-            ):
+            print("  chflags -R nohidden .venv ->",
+                  "fixed" if left == 0 else f"{left} still hidden")
+            home = Path.home()
+            if any(str(venv).startswith(str(home / d)) for d in ("Desktop", "Documents")):
                 print("  NOTE: this project lives under Desktop/Documents. If iCloud syncs "
-                      "those folders, the flag will keep coming back — move the repo "
-                      "(e.g. ~/dev/presence). See scripts/doctor.py docstring.")
+                      "those folders, prefer moving the repo (e.g. ~/dev/presence).")
         else:
             print("hidden-flagged files in venv: 0")
 

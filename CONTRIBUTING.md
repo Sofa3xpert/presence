@@ -19,10 +19,12 @@ uv run ruff check .
 uv marks `.venv` with the macOS *hidden* flag; if the repo sits in an
 iCloud-synced folder (Desktop/Documents), iCloud propagates that flag to every
 file inside, and Python 3.12+ silently skips hidden `.pth` files
-(astral-sh/uv#16977). **Keep the repo outside iCloud-synced folders** — e.g.
-`~/dev/presence`. Stopgap: `uv run --no-sync python scripts/doctor.py`
-(runs `chflags -R nohidden .venv`). Tests are immune either way —
-`tests/conftest.py` puts `src` on the path directly.
+(astral-sh/uv#16977) — and keeps re-applying it from its cloud metadata, so
+un-hiding alone doesn't stick. Fix: `uv run --no-sync python scripts/doctor.py`
+— it marks `.venv` as ignored by the iCloud file provider
+(`com.apple.fileprovider.ignore#P`) and un-hides everything. Better still,
+**keep the repo outside iCloud-synced folders** (e.g. `~/dev/presence`).
+Tests are immune either way — `tests/conftest.py` puts `src` on the path.
 
 ## Ground rules
 
