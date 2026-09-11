@@ -15,6 +15,12 @@ uv run pytest    # tests
 uv run ruff check .
 ```
 
+**macOS gotcha — "No module named 'presence'" although `uv pip list` shows it:**
+Python 3.12+ silently skips `.pth` files that carry the macOS *hidden* flag,
+and some uv builds write the editable install's `.pth` that way. Run
+`uv run --no-sync python scripts/doctor.py` — it finds and un-hides the file.
+Tests are immune (`tests/conftest.py` puts `src` on the path directly).
+
 ## Ground rules
 
 - Read [CHARTER.md](CHARTER.md) first. PRs that weaken a charter rule will be
