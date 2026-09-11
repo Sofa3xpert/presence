@@ -16,10 +16,13 @@ uv run ruff check .
 ```
 
 **macOS gotcha — "No module named 'presence'" although `uv pip list` shows it:**
-Python 3.12+ silently skips `.pth` files that carry the macOS *hidden* flag,
-and some uv builds write the editable install's `.pth` that way. Run
-`uv run --no-sync python scripts/doctor.py` — it finds and un-hides the file.
-Tests are immune (`tests/conftest.py` puts `src` on the path directly).
+uv marks `.venv` with the macOS *hidden* flag; if the repo sits in an
+iCloud-synced folder (Desktop/Documents), iCloud propagates that flag to every
+file inside, and Python 3.12+ silently skips hidden `.pth` files
+(astral-sh/uv#16977). **Keep the repo outside iCloud-synced folders** — e.g.
+`~/dev/presence`. Stopgap: `uv run --no-sync python scripts/doctor.py`
+(runs `chflags -R nohidden .venv`). Tests are immune either way —
+`tests/conftest.py` puts `src` on the path directly.
 
 ## Ground rules
 
