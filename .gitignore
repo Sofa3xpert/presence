@@ -1,0 +1,20 @@
+# python
+__pycache__/
+*.pyc
+.venv/
+dist/
+build/
+*.egg-info/
+.ruff_cache/
+.pytest_cache/
+
+# local data — never committed, per charter
+*.db
+*.sqlite*
+profile.yaml
+search.yaml
+.env
+secrets/
+
+# os
+.DS_Store
