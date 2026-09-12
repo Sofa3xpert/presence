@@ -45,6 +45,8 @@ class SearchConfig(BaseModel):
     remote_ok: bool = True
     max_experience_years: int = 2
     blocklist: list[str] = Field(default_factory=list)
+    freshness_hours: int = 30  # only postings newer than this reach Scout
+    results_per_query: int = 20
 
 
 class ProviderConfig(BaseModel):

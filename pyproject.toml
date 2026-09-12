@@ -11,6 +11,7 @@ dependencies = [
     "anthropic>=0.40",
     "openai>=1.55",
     "pydantic>=2.7",
+    "python-jobspy>=1.1",
     "pyyaml>=6.0",
 ]
 
