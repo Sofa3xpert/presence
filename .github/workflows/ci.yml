@@ -19,6 +19,22 @@ jobs:
         run: uv run ruff check .
       - name: Tests
         run: uv run pytest -q
+      - name: requirements files match the lock
+        run: |
+          uv export --format requirements-txt --frozen --no-dev --no-hashes --no-emit-project --no-header | diff - requirements.txt
+          uv export --format requirements-txt --frozen --only-dev --no-hashes --no-emit-project --no-header | diff - requirements-dev.txt
+
+  pip:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install with pip only
+        run: pip install -r requirements.txt -r requirements-dev.txt && pip install -e .
+      - name: Command and tests
+        run: presence --version && pytest -q
 
   docker:
     runs-on: ubuntu-latest

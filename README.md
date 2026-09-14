@@ -42,12 +42,32 @@ uv run presence telegram pair ~/presence-data
 uv run presence cycle ~/presence-data --send
 ```
 
+The guided setup lives in the local app — model (Ollama one-click or an API
+key), Telegram pairing by QR, tracker (SQLite here, or a Google Sheet mirror),
+CV, boards, filters:
+
+```bash
+uv run presence serve ~/presence-data           # then open http://127.0.0.1:8790
+```
+
+Without uv, on a fresh machine (Python 3.12):
+
+```bash
+git clone https://github.com/Sofa3xpert/presence.git && cd presence
+python3.12 -m venv .venv && source .venv/bin/activate   # Windows: .venv\Scripts\activate
+pip install -r requirements.txt && pip install -e .
+presence serve ~/presence-data
+```
+
+`requirements.txt` is exported from `uv.lock` (`requirements-dev.txt` adds
+pytest and ruff); CI fails if either drifts from the lock.
+
 With Docker: `docker compose run --rm presence init /data`, then the same
 commands with `/data` (the `./data` folder on the host holds everything).
 
 Not there yet: Scout's judgment and tiering (the cycle currently applies your
-filters only), the local setup app, the Google Sheet tracker option, alert-email
-intake, scheduled runs. See the architecture document for the plan.
+filters only), alert-email intake, scheduled runs, the apply extension. See the
+architecture document for the plan.
 
 ## Status: pre-alpha
 
