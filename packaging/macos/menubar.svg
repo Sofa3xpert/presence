@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="44" height="44" viewBox="0 0 44 44">
+  <!-- Menu-bar template glyph: black on transparent; macOS recolours it (rumps template=True). -->
+  <g transform="translate(1 1) scale(0.5)">
+    <path d="M22 12 H10 V72 H22" fill="none" stroke="#000" stroke-width="7" stroke-linecap="square"/>
+    <path d="M62 12 H74 V72 H62" fill="none" stroke="#000" stroke-width="7" stroke-linecap="square"/>
+    <path d="M42 68 V38" stroke="#000" stroke-width="6" stroke-linecap="round" fill="none"/>
+    <path d="M42 42 C42 28 53 24 62 26 C62 40 51 45 42 42 Z" fill="#000"/>
+    <path d="M42 49 C40 40 31 37 24 39 C26 49 36 52 42 49 Z" fill="#000"/>
+  </g>
+</svg>

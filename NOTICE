@@ -1,0 +1,39 @@
+Presence — third-party notices
+==============================
+
+Presence itself is licensed under the GNU Affero General Public License v3.0
+(see LICENSE). The packaged app (Presence.app / .dmg) bundles the following
+open-source components, each under its own licence:
+
+  Python                      PSF License
+  Flask, Werkzeug, Jinja2,
+  MarkupSafe, itsdangerous,
+  click, blinker              BSD-3-Clause
+  PyMuPDF (pymupdf) + MuPDF   AGPL-3.0 (Artifex Software)
+  cryptography                Apache-2.0 / BSD-3-Clause (dual)
+  google-auth,
+  google-auth-oauthlib        Apache-2.0
+  requests, urllib3, certifi  Apache-2.0 / MIT / MPL-2.0
+  pydantic, pydantic-core     MIT
+  anthropic SDK               MIT
+  openai SDK                  Apache-2.0
+  PyYAML                      MIT
+  segno                       BSD-3-Clause
+  keyring                     MIT
+  zstandard                   BSD-3-Clause
+  rumps                       BSD-3-Clause
+  PyObjC                      MIT
+  PyInstaller (bootloader)    GPL-2.0 with the bootloader exception
+                              (frozen apps carry no GPL obligation)
+
+Not bundled, offered as an optional download from its own site:
+
+  Ollama                      MIT (https://github.com/ollama/ollama)
+
+Fonts referenced by the local pages (loaded from Google Fonts, not bundled):
+
+  Young Serif, Nunito Sans,
+  IBM Plex Mono               SIL Open Font License 1.1
+
+The Presence icon (brackets holding a sprout) is part of this project and
+shares its licence.
