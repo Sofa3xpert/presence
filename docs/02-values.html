@@ -1,0 +1,73 @@
+<!DOCTYPE html><html><head><meta charset="utf-8"><title>Presence — Values</title>
+<link rel="stylesheet" href="_doc.css"></head><body>
+<div class="cover">
+  <div class="eyebrow">Presence · Document 2 of 3 · Values</div>
+  <h1>What Presence stands for</h1>
+  <p class="sub">The values behind the product, derived from the objectives and rules already decided — written so that every future decision, feature, partner and line of code can be checked against them.</p>
+  <div class="meta">Version 1.0 · 12 September 2026 · applies to every Presence track (careers, students) and to the brand</div>
+</div>
+
+<h2>Mission</h2>
+<div class="core"><b>Give people who are looking for work — or preparing for it — a capable companion they own outright: one that works for them every day, tells them the truth, keeps their data at home, and never costs them the money they are trying to earn.</b></div>
+<p>Presence exists because the people who need this help most — job seekers, students, people between things — are exactly the people who cannot pay for it, and are exactly the people whose data the existing tools quietly harvest. The answer is not a cheaper subscription. It is a tool they run themselves.</p>
+
+<h2>Who we serve</h2>
+<p>A student in their final year with no idea where the next step comes from. A graduate on a visa clock. Anyone doing the long, repetitive, demoralising work of finding a job while money runs down. And — through the student track — anyone in the years before that, trying to study well, set goals and keep a routine. We build for the person at the kitchen table, not for the recruiter, the platform, or the investor.</p>
+
+<h2>The eight values</h2>
+
+<h3>1. The human decides</h3>
+<p>Presence finds, prepares, reminds and coaches. It never applies, submits, sends or posts on a person's behalf — <b>a human clicks every Submit</b>. It never defeats a website's bot protection or rate limits, because a companion that sneaks is not one you can trust with your name.</p>
+<p class="small">In practice: there is no code path that submits an application; the test suite enforces it; a pull request that adds one is declined regardless of quality.</p>
+
+<h3>2. Truth over polish</h3>
+<p>Nothing Presence says about you is invented. Facts come from what you stated or what was extracted and you confirmed. Drafts never contain a number, employer, skill or achievement you did not give. Progress reports say what happened, including failures.</p>
+<p class="small">In practice: an unconfirmed profile is refused at load; writers are grounded in confirmed facts only; run reports list what was skipped and why. This value came from the author's own job hunt, where the rule "never overclaim" was worth more than any template.</p>
+
+<h3>3. Your data stays yours</h3>
+<p>Your CV, profile, tracker and credentials live on your machine. No telemetry, no analytics phoning home, no cloud account to create. Where Presence reads your mailbox, the access is read-only by construction. The code is open so that this claim can be checked rather than believed.</p>
+
+<h3>4. Free where it matters</h3>
+<p>Everything essential is free, forever. No tiers, no monthly fee, no "pro" gate in front of the features that get someone a job. Presence is funded by the people it has helped, voluntarily, after the fact — and by anything that is genuinely extra: hosted convenience, setup help, sponsor credit. The moment a feature is essential, it is free.</p>
+<p class="small">In practice: the pricing page says "$0 — you're job hunting, keep your money." The zero-cost path (free software plus a free local model) is a tested, first-class configuration, so even model costs cannot become a hidden subscription.</p>
+
+<h3>5. Small core, open edges</h3>
+<p>The engine interprets only what it must; everything else is a pack, a plugin, or a field it stores and never reads. Sims, drills, prompts and connectors are plain-text packs anyone can edit and share under MIT. Presence is a customisable ecosystem, not a service — it should fit a person's life, not the other way round.</p>
+
+<h3>6. No surprises</h3>
+<p>A companion that runs unattended must be boring in the right ways: it never corrupts your records, it fails softly when a source is down, it stops and says so when the daily spending cap is reached, it survives a laptop closing, and its status is always one message away.</p>
+
+<h3>7. Built by the people it serves</h3>
+<p>Presence was built by a graduate who needed it, on his own job hunt, and he remains user number one. The student track is built by a student. Design decisions come from real use first, evidence second, opinion last — the dedupe rules, the timeline format, the "one action today" brief all came from lived weeks, not whiteboards.</p>
+
+<h3>8. Respect for the other side</h3>
+<p>Employers, job boards and recruiters are not targets. Presence is polite to the sources it reads — one query at a time, as an ordinary client — and it never mass-applies. Spray-and-pray wastes everyone's time, including the applicant's; it is the very thing Presence refuses to become.</p>
+
+<h2>What we are not</h2>
+<ul>
+<li><b>Not an auto-applier.</b> The category is crowded, low-trust and increasingly resented by employers. We are the opposite of it.</li>
+<li><b>Not a data business.</b> There is nothing to harvest because nothing leaves the machine.</li>
+<li><b>Not a subscription.</b> Essential features will never move behind a paywall — a promise, not a pricing experiment.</li>
+<li><b>Not a replacement for judgment.</b> Presence prepares the decision; the person makes it.</li>
+</ul>
+
+<h2>Decision rules</h2>
+<p>When two options both seem reasonable, these settle it:</p>
+<table>
+<tr><th style="width:34%">When in doubt…</th><th>…choose</th></tr>
+<tr><td>Precision or recall?</td><td>Precision. Never swallow a real posting, never merge two different jobs, never act on an uncertain fact. A missed duplicate costs a glance; a lost opportunity costs a chance.</td></tr>
+<tr><td>Convenience or the charter?</td><td>The charter. Convenience features that weaken any of the four rules are declined.</td></tr>
+<tr><td>Feature or simplicity?</td><td>Simplicity in the core; the feature becomes a pack or plugin if it earns its place.</td></tr>
+<tr><td>Free or paid?</td><td>Free if a person needs it to get the job. Paid only if it is provably extra.</td></tr>
+<tr><td>Speak or stay quiet?</td><td>Speak for time-sensitive things (an interview invite), stay quiet for the rest until the daily brief. Attention is the user's scarcest resource.</td></tr>
+<tr><td>Ship or measure?</td><td>Measure — an eval, a real-data run, a beta week — when the question is about judgment quality; ship when it is about plumbing.</td></tr>
+</table>
+
+<h2>How the values become real</h2>
+<ul>
+<li>The four charter rules live in <code>CHARTER.md</code> and in tests; CI fails if they are weakened.</li>
+<li>Contribution rules say it plainly: pull requests that weaken a value are declined regardless of technical quality.</li>
+<li>The brand (logo, voice, style) must express these values — calm, honest, on the person's side — and never borrow the urgency and hype of the tools we refuse to be.</li>
+<li>This document is versioned. Changing a value is a public decision with a written reason, not a quiet edit.</li>
+</ul>
+</body></html>

@@ -1,0 +1,68 @@
+<!DOCTYPE html><html><head><meta charset="utf-8"><title>Presence — Progress Brief</title>
+<link rel="stylesheet" href="_doc.css"></head><body>
+<div class="cover">
+  <div class="eyebrow">Presence · Document 1 of 3 · Progress brief</div>
+  <h1>Where Presence stands, and what comes next</h1>
+  <p class="sub">A job-search companion people run themselves — status of the build as of 12 September 2026, with the work still ahead.</p>
+  <div class="meta">Prepared for Denis Baldakov (product owner) · internal, shareable with collaborators · companion documents: Values (2), Student track (3)</div>
+</div>
+
+<h2>1. In one paragraph</h2>
+<p>Presence is the productisation of a personal job-hunt automation that has run in production since 13 August 2026 (six scheduled agents, seven job-source connector types, a 612-row application tracker, a Telegram delivery loop, and — since 12 September — automatic reading of application-status emails). The product keeps what made that system work and strips the rest: <b>one source, two agents, one messenger</b>, a small tracker core, everything essential free forever, and a charter enforced in code. Four of eight workstreams are complete; the runtime has been proven live against a frontier API and a free local model; the connector-to-tracker path is proven end to end. The next work is delivery (Telegram), then the agent packs that turn plumbing into judgment.</p>
+
+<h2>2. What has been decided</h2>
+<table>
+<tr><th style="width:26%">Decision</th><th>Outcome</th></tr>
+<tr><td>What it is</td><td>An open, local-first operating system for the job hunt (and the study years before it): AI agents + a tracker with conventions + training tools + messenger delivery, run on the user's own machine and keys. The "Home Assistant model", aimed at careers.</td></tr>
+<tr><td>v1 shape (canonical spec: <code>Presence_Architecture.pdf</code>)</td><td>Exactly one source (LinkedIn, library-based search), two agents (Scout, Brief), SQLite tracker, Telegram, BYO model key (Anthropic / OpenAI / Ollama — the zero-cost path), Docker, onboarding as a conversation (CV upload → parsed draft → five questions → confirm).</td></tr>
+<tr><td>Business model</td><td>Everything essential is free, forever — no tiers, no subscriptions. Funding by voluntary support (Patreon / GitHub Sponsors / Open Collective). Paid may only ever be "extra, not essential". Training sims and drills are editable packs in the free core.</td></tr>
+<tr><td>Charter (enforced by tests)</td><td>A human clicks every Submit · no invented facts · data stays on the user's machine · spending is capped daily.</td></tr>
+<tr><td>Licensing</td><td>AGPL-3.0 core; MIT for pack and SDK formats so community content stays frictionless.</td></tr>
+<tr><td>Repository</td><td><code>github.com/Sofa3xpert/presence</code>, private for now, single contributor, CI (lint · tests · Docker build) green on every push. Commit history is minimal and product-focused.</td></tr>
+<tr><td>Tracker schema</td><td>Small fixed engine core plus an uninterpreted <code>extra</code> field per job; new features become new interpreters, not migrations.</td></tr>
+</table>
+
+<h2>3. Work completed (11–12 September 2026)</h2>
+<table>
+<tr><th style="width:11%">Step</th><th style="width:22%">Delivered</th><th>Contents</th></tr>
+<tr><td><span class="done">W0</span></td><td>Foundations</td><td>Monorepo (<code>src/presence/{core,agents,connectors,adapters,tracker,packs}</code>), licences, README with the free-forever story, CHARTER.md, CONTRIBUTING, issue templates, CI, Dockerfile, uv toolchain. The charter is guarded by a test that fails if any rule is removed.</td></tr>
+<tr><td><span class="done">W1</span></td><td>Core runtime</td><td>Provider-agnostic agent executor (a tool-use loop; two adapters cover Anthropic, OpenAI, Ollama and LM Studio); daily token budget with a notify-once hook; supervisor with grace windows, cooldowns, attempt caps, dependencies and catch-up after sleep; YAML config with human-worded errors (an unconfirmed profile is refused — charter rule 2 as code); local-only secret lookup; a live check command. <b>M1 signed off live</b>: Anthropic (claude-haiku-4-5) and Ollama (qwen3.5:9b) both drove the loop through a tool call to completion.</td></tr>
+<tr><td><span class="done">W2</span></td><td>Tracker &amp; conventions engine</td><td>Stdlib SQLite, no ORM; versioned migrations; statuses <code>to_apply · applied · assessment · interview · interview_done · rejected · ignored</code>; the timeline ("29 Aug → CCAT 1 Sep → rejected 8 Sep") is rendered from an events table, never stored; closed jobs accept only notes; cooldown registry; CSV export; online backup. <b>Precision-first dedupe</b>: same link key merges; identical title merges only when one side has no link; two different links are two postings. Validated read-only against the real 612-row sheet.</td></tr>
+<tr><td><span class="done">W3</span></td><td>Connectors</td><td>One connector interface with a registry; LinkedIn connector on python-jobspy with per-query error isolation; queries built from <code>search.yaml</code> (freshness window, blocklist, results cap); seen-postings store so a judged posting never resurfaces; live check ran a real search of 10 postings straight into a tracker.</td></tr>
+<tr><td colspan="3" class="small">Test suite: 43 tests, none touching the network. Tooling lesson recorded: an environment "doctor" script and test-path independence were added after a macOS venv quirk cost debugging time.</td></tr>
+</table>
+
+<h2>4. What remains for v1</h2>
+<table>
+<tr><th style="width:11%">Step</th><th style="width:22%">Deliverable</th><th>Notes / definition of done</th></tr>
+<tr><td><span class="todo">W4</span></td><td>Telegram adapter</td><td>Messenger interface with Telegram as first transport; pairing by token/QR; daily brief delivery; <code>/status /pause /redo</code>; the budget-exhausted hook wired to a message.</td></tr>
+<tr><td><span class="todo">W6</span></td><td>Onboarding &amp; docs</td><td>CV upload → parsed draft → five questions → confirmation → first run inside 15 minutes; CLI fallback; docs site (quickstart, connector and pack authoring, the charter). Closes <b>M3 — "it talks to you"</b> and triggers the dogfood switch: the author moves his own hunt onto Presence.</td></tr>
+<tr><td><span class="todo">W5</span></td><td>Agent packs + evals</td><td>De-personalised Scout and Brief prompts in a shared pack format; an eval harness of fixture jobs with expected keep/drop/tier decisions, run against Claude, GPT and a local model. Closes <b>M2 — "Scout fills a tracker"</b> (the plumbing beneath it is already proven) and gates <b>M4 — "anyone can install it"</b>.</td></tr>
+<tr><td><span class="todo">W7</span></td><td>Hardening &amp; beta</td><td>Recorded-fixture connector tests; full daily cycle in Docker; macOS / Linux / Windows-WSL; private beta of 5–10 users; two fix cycles. Closes <b>M5 — v1.0</b>.</td></tr>
+</table>
+<div class="core"><b>v1.0 definition of done (unchanged):</b> fresh machine to working bot in under 15 minutes · three providers pass the eval suite · zero-cost path (Ollama) verified end to end · kill the container mid-run → clean recovery · token cap fires before overspend · tracker survives 30 days unattended · charter enforced in tests · secrets absent from logs · backup/restore tested · connector guide validated by an outside contributor · v0.9 → v1.0 migration on a real database · five beta users complete a week unassisted.</div>
+
+<h2>5. Backlog beyond v1 (recorded, not scheduled)</h2>
+<ul>
+<li><b>Email-alerts connector</b> — the customer's saved-search alert emails as a second source; the registry already has the slot.</li>
+<li><b>Status-mail loop</b> — reading application outcomes from the mailbox (read-only scan → agent judgment → one guarded writer). Built and running in the personal pipeline since 12 September; ports almost as-is.</li>
+<li><b>Training studio</b> — assessment drills, interview sims with an AI facilitator, daily problem sets; v1 ships only the pack format. Also the natural meeting point with the student track (Document 3).</li>
+<li>More sources (ATS public APIs, region watchlists), Sheets/Notion tracker backends, WhatsApp/Discord adapters, desktop app packaging, an optional hosted runner — all explicitly later.</li>
+</ul>
+
+<h2>6. Open questions and risks</h2>
+<ul>
+<li><b>Judgment on cheap models</b> — how much of Scout's keep/drop/tier quality survives on a local 9B model is unknown until the eval harness exists (W5). Decide by measurement, not opinion.</li>
+<li><b>Board scraping is terms-of-service grey.</b> v1 accepts it as the pragmatic start (each user runs as themselves); the clean channels (email alerts, public ATS APIs) are the strategic direction.</li>
+<li><b>Brief timing and volume</b> — one digest versus instant pings for top-tier finds; decide during W4/W6 with real use.</li>
+<li><b>"Anywhere" versus "no service"</b> — a phone-only user cannot self-host; the hosted runner stays an optional convenience decided later.</li>
+<li><b>Time</b> — the job hunt outranks product weeks; milestones are self-contained so pauses cost nothing but calendar.</li>
+</ul>
+
+<h2>7. Next actions</h2>
+<ol>
+<li>Brand foundations (logo, style, brand-book) — in parallel with build work, now that the three documents define what the brand must express.</li>
+<li>W4 Telegram adapter — the next build session.</li>
+<li>Student-track kickoff with the collaborator (Document 3).</li>
+</ol>
+</body></html>

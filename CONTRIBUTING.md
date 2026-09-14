@@ -32,8 +32,9 @@ Tests are immune either way — `tests/conftest.py` puts `src` on the path.
   declined regardless of technical quality.
 - Conventional commits (`feat:`, `fix:`, `docs:`, `chore:`, ...); semver.
 - One logical change per PR; tests accompany behavior changes.
-- Connectors must use official/public endpoints and respect the source's
-  terms; scrapers that require evasion belong nowhere in this project.
+- Connectors read only interfaces a provider publishes for that purpose
+  (documented job-board APIs, the user's own mailbox). Scrapers of any kind —
+  with or without evasion — are declined; see the catalog for what is on hold.
 
 ## Licensing of contributions
 

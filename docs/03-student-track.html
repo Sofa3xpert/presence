@@ -1,0 +1,57 @@
+<!DOCTYPE html><html><head><meta charset="utf-8"><title>Presence — Student Track</title>
+<link rel="stylesheet" href="_doc.css"></head><body>
+<div class="cover">
+  <div class="eyebrow">Presence · Document 3 of 3 · Collaboration brief</div>
+  <h1>Presence for students: the second track</h1>
+  <p class="sub">A brief for a collaborator taking the same problem from the student's side — studying, goals, routine — on the same engine, the same stack and the same values.</p>
+  <div class="meta">Draft for discussion · 12 September 2026 · read Documents 1 (progress) and 2 (values) first</div>
+</div>
+
+<h2>1. The idea in one paragraph</h2>
+<p>Presence already has a runtime that runs AI agents on a schedule with a daily spending cap, a tracker engine with conventions, a messenger delivery layer, a configuration model built around confirmed facts, and a charter. All of that is domain-neutral. The careers track points it at job postings; the <b>student track points the same machine at a degree</b>: turning a syllabus and a timetable into a plan, keeping a daily study routine, tracking goals and deadlines, and coaching — delivered as a bot in the student's messenger, running on the student's own laptop, free. One engine, two tracks, one brand.</p>
+
+<h2>2. What is shared and what is separate</h2>
+<table>
+<tr><th style="width:24%">Layer</th><th style="width:38%">Careers track (built)</th><th>Student track (to build)</th></tr>
+<tr><td>Runtime <span class="done">shared</span></td><td colspan="2">Agent executor (Anthropic / OpenAI / Ollama), scheduler, daily token budget, config loader, secrets — reused as-is. The student track never re-implements these.</td></tr>
+<tr><td>Messenger <span class="done">shared</span></td><td colspan="2">Telegram adapter (W4, next) with pairing, daily brief, commands. One bot can serve both tracks or each track its own — decide together.</td></tr>
+<tr><td>Tracker engine <span class="done">shared</span></td><td>Jobs: company, title, url, status, events timeline, <code>extra</code>.</td><td>Records: modules, assignments, exams, goals — same design (small fixed core, events timeline, <code>extra</code>), a second schema in the same engine. Status vocabulary is the track's own (e.g. <code>planned · in_progress · submitted · graded · missed</code>).</td></tr>
+<tr><td>Agents <span class="todo">per track</span></td><td>Scout (find &amp; judge postings), Brief (daily digest).</td><td>Planner (syllabus + timetable + goals → a weekly plan), Brief (today's study brief: what, when, one first action), Coach (spaced-repetition questions, quizzes, retrospectives) — the pipeline's existing Coach and training hub are the precedent.</td></tr>
+<tr><td>Connectors <span class="todo">per track</span></td><td>LinkedIn search (library-based).</td><td>Deterministic imports first: ICS calendars (university timetables export them), Moodle/Canvas exports, reading lists, a pasted syllabus. No scraping needed — a strong first connector because it is entirely under the student's control.</td></tr>
+<tr><td>Onboarding <span class="todo">per track</span></td><td>CV upload + five questions.</td><td>Timetable/syllabus upload + five questions: goals for the term, hours available per week, exam dates, weak subjects, routine constraints (sleep, work shifts). Settings remain a conversation, never a form.</td></tr>
+<tr><td>Packs <span class="done">shared format</span></td><td colspan="2">Prompts, drills and sims are plain-text packs (MIT). A community pack library serves both tracks; a "CCAT drill" pack and a "linear algebra recall" pack are the same kind of thing.</td></tr>
+<tr><td>Charter &amp; values <span class="done">shared</span></td><td colspan="2">Identical. For students two rules bite hardest: <b>no invented facts</b> (never fabricate a grade, a deadline or a "you're on track" that isn't true) and <b>data stays home</b> (academic records are sensitive; nothing leaves the laptop).</td></tr>
+</table>
+
+<h2>3. Proposed repository model</h2>
+<div class="core"><b>One core, two domain packages, one repository.</b> The runtime, messenger and tracker engine stay in <code>src/presence/</code>; each track owns a domain package (<code>src/presence/domains/careers/</code>, <code>src/presence/domains/study/</code>) holding its agents, schema, connectors and onboarding. Ownership is explicit (CODEOWNERS): the collaborator owns <code>domains/study/</code> outright and proposes changes to the core through pull requests like anyone else.</div>
+<p>Why not a fork or a second repo: the tracks would drift apart within weeks, and every runtime fix would need doing twice. Why not one blended product: the student and the job seeker want different daily loops; separate domain packages keep each loop simple. A later option, once the core is stable and packaged, is to publish it and let the study track depend on it as a library — the domain-package boundary makes that a move, not a rewrite.</p>
+
+<h2>4. Working agreement</h2>
+<ul>
+<li><b>Values first.</b> Document 2 applies in full; the charter is enforced by tests in the shared core.</li>
+<li><b>Same toolchain.</b> Python 3.12, uv, pydantic, SQLite, ruff, pytest, GitHub Actions; conventional commits; minimal, product-focused commit messages; one logical change per pull request; tests with behaviour changes; no network calls in tests.</li>
+<li><b>Same milestone shape.</b> M1 (a config-driven agent runs) is already done for both tracks — reuse it. The student track's own milestones: <b>M2 — Planner fills a study tracker</b> from an ICS import; <b>M3 — it talks to you</b> (daily study brief in Telegram, first dogfood week by the collaborator); <b>M4 — anyone can install it</b>; <b>M5 — v1.0</b>.</li>
+<li><b>Dogfooding is mandatory.</b> The collaborator runs the student track on their own term before anyone else does — user number one, exactly as with the careers track.</li>
+<li><b>Cadence.</b> One short weekly sync; decisions written down in the repo (docs/decisions) so neither track depends on memory or chat history.</li>
+</ul>
+
+<h2>5. First four weeks for the collaborator</h2>
+<ol>
+<li><b>Week 1 — onboard.</b> Clone, run the environment doctor, run the test suite, run the live check (<code>python -m presence.core.check ollama &lt;model&gt;</code> needs no key). Read the architecture spec and Documents 1–2. Deliverable: a one-page <b>student-track spec</b> in the same style as the careers spec — the daily loop and the five onboarding questions.</li>
+<li><b>Week 2 — the study tracker.</b> Define the record core and status vocabulary; implement it on the shared engine; validate with the collaborator's own real timetable, read-only, exactly as the careers tracker was validated on a real 612-row sheet.</li>
+<li><b>Week 3 — first connector.</b> ICS calendar import behind the shared connector interface, with tests on recorded fixtures. Deliverable: M2 (Planner fills a study tracker).</li>
+<li><b>Week 4 — Planner + Brief packs.</b> The two prompts in the shared pack format; a first eval set (fixture syllabi with expected plans) so quality is measured across models, not guessed.</li>
+</ol>
+
+<h2>6. Questions to decide together</h2>
+<ul>
+<li>One bot for both tracks, or one per track? (Affects pairing and command namespaces.)</li>
+<li>Name and brand: "Presence" with tracks, or a named sub-brand for students? The brand-book being started now should answer this once.</li>
+<li>Which university systems the collaborator can export from (ICS is universal; Moodle/Canvas vary) — this decides the first connector's scope.</li>
+<li>How the Coach uses the shared training studio when it arrives (drills for exams and drills for assessments are one mechanism).</li>
+<li>Contribution credit and licensing: contributors license under the file's governing licence (AGPL core, MIT packs) — confirm the collaborator is comfortable with that before the first commit.</li>
+</ul>
+
+<div class="callout"><b>The one-sentence pitch for the collaborator:</b> the hard, generic part — an agent runtime that is safe, capped, local and honest — already exists and is tested; your job is the part only a student can get right: what a good study day looks like, and how a companion should nudge without nagging.</div>
+</body></html>

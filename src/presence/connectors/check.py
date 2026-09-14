@@ -1,10 +1,10 @@
-"""W3 verification: run one real search through a connector into a fresh tracker.
+"""Verification: read one real company board into a fresh tracker.
 
-    uv run python -m presence.connectors.check linkedin \
-        "graduate machine learning engineer" "London, United Kingdom"
+    uv run python -m presence.connectors.check greenhouse figma "Figma"
+    uv run python -m presence.connectors.check lever palantir "Palantir"
+    uv run python -m presence.connectors.check ashby openai "OpenAI"
 
-Prints what came back and how many rows the tracker accepted (dedupe applied).
-Uses a temporary database; nothing is kept."""
+Uses the provider's published API and a temporary database; nothing is kept."""
 
 from __future__ import annotations
 
@@ -12,10 +12,8 @@ import sys
 import tempfile
 from pathlib import Path
 
-from presence.connectors import (
-    base,
-    linkedin,  # noqa: F401  (registers "linkedin")
-)
+from presence.connectors import base, boards  # noqa: F401  (boards registers providers)
+from presence.core.config import SourceEntry
 from presence.tracker import Tracker
 
 
@@ -23,25 +21,22 @@ def main() -> int:
     if len(sys.argv) < 3:
         print(__doc__)
         return 2
-    name, term = sys.argv[1], sys.argv[2]
-    location = sys.argv[3] if len(sys.argv) > 3 else ""
-    connector = base.create(name)
+    provider, token = sys.argv[1], sys.argv[2]
+    label = sys.argv[3] if len(sys.argv) > 3 else token.title()
+    src = SourceEntry(id=token, provider=provider, label=label, config={"board": token})
     try:
-        postings = connector.search(base.SearchQuery(term=term, location=location, limit=10,
-                                                     hours_old=72))
+        postings = base.create(provider).fetch(src)
     except base.ConnectorError as exc:
         print("CONNECTOR ERROR:", exc)
         return 1
     with tempfile.TemporaryDirectory() as tmp:
         tracker = Tracker(Path(tmp) / "check.db")
         created = sum(1 for p in postings if tracker.ingest(p.candidate)[1])
-        for p in postings[:10]:
-            print(f"  {p.posted or '----------'} {p.company[:26]:26} | "
-                  f"{p.title[:48]:48} | {p.location[:22]}")
-        print(f"{len(postings)} postings from {name}; tracker accepted {created} "
-              f"(dedupe dropped {len(postings) - created})")
+        for p in postings[:8]:
+            print(f"  {p.posted or '----------'} {p.title[:52]:52} | {p.location[:26]}")
+        print(f"{len(postings)} postings from {provider}/{token}; tracker accepted {created}")
         tracker.close()
-    print("W3 CHECK PASS" if postings else "W3 CHECK FAIL (no postings)")
+    print("CHECK PASS" if postings else "CHECK FAIL (no postings)")
     return 0 if postings else 1
 
 

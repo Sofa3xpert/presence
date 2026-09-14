@@ -1,110 +1,162 @@
-"""Connector layer tests — no network; the LinkedIn scraper is monkeypatched."""
+"""Connector layer tests — no network; board responses are fed as JSON."""
 
 from datetime import date
 
 import pytest
 
 from presence.connectors import (
+    CATALOG,
     REGISTRY,
     ConnectorError,
     Posting,
-    SearchQuery,
-    SeenPostings,
-    build_queries,
+    available,
+    boards,
     create,
-    run_search,
 )
-from presence.connectors.linkedin import LinkedInConnector, _rows_to_postings
-from presence.core.config import SearchConfig
+from presence.connectors.base import matches, run_sources
+from presence.core.config import SearchConfig, SourceEntry, load_sources
+
+SRC = SourceEntry(id="acme", provider="greenhouse", label="Acme", config={"board": "acme"})
 
 
-class FakeConnector:
-    name = "fake"
-
-    def __init__(self, results, fail_on=None):
-        self.results, self.fail_on, self.queries = results, fail_on, []
-
-    def search(self, q: SearchQuery):
-        self.queries.append(q)
-        if q.term == self.fail_on:
-            raise ConnectorError("boom")
-        return self.results.get(q.term, [])
+def P(title, location="London, UK", url="https://x/1", posted="", company="Acme"):
+    return Posting(company=company, title=title, location=location, url=url, posted=posted)
 
 
-def P(company, title, url="", **kw):
-    return Posting(company=company, title=title, url=url, source="fake", **kw)
+def test_registry_has_the_five_published_apis_and_no_scrapers():
+    assert set(REGISTRY) == {"greenhouse", "lever", "ashby", "workable", "smartrecruiters"}
+    assert {c["provider"] for c in available()} == set(REGISTRY)
+    assert all(c["kind"] in ("board", "inbox", "aggregator") for c in CATALOG)
+    assert not any(c["provider"] in ("linkedin", "indeed", "jobspy") for c in CATALOG)
+    with pytest.raises(ConnectorError, match="unknown provider"):
+        create("linkedin")
 
 
-def test_registry_knows_linkedin_and_rejects_unknown():
-    assert "linkedin" in REGISTRY
-    assert isinstance(create("linkedin"), LinkedInConnector)
-    with pytest.raises(ConnectorError, match="unknown connector"):
-        create("carrier-pigeon")
+def test_filters():
+    s = SearchConfig(
+        locations=["London"],
+        title_include=["engineer", "scientist"],
+        blocklist=["spamco"],
+        freshness_hours=48,
+    )
+    today = date(2026, 9, 14)
+    assert matches(P("AI Engineer", posted="2026-09-13"), s, today)
+    assert not matches(P("Senior AI Engineer", posted="2026-09-13"), s, today)
+    assert not matches(P("AI Engineer", location="Paris", posted="2026-09-13"), s, today)
+    assert matches(P("AI Engineer", location="Remote - Europe", posted="2026-09-13"), s, today)
+    assert not matches(P("Sales Lead", posted="2026-09-13"), s, today)
+    assert not matches(P("AI Engineer", posted="2026-09-01"), s, today)
+    assert matches(P("AI Engineer", posted=""), s, today)  # unknown date: kept
+    assert not matches(P("AI Engineer", company="SpamCo Ltd", posted="2026-09-13"), s, today)
+    assert matches(P("Anything"), SearchConfig())  # defaults: anywhere, any title bar seniors
 
 
-def test_build_queries_is_the_cross_product_with_config_knobs():
-    cfg = SearchConfig(queries=["ml engineer", "data scientist"], locations=["London", "Remote"],
-                       freshness_hours=48, results_per_query=7)
-    qs = build_queries(cfg)
-    assert [(q.term, q.location) for q in qs] == [
-        ("ml engineer", "London"), ("ml engineer", "Remote"),
-        ("data scientist", "London"), ("data scientist", "Remote")]
-    assert qs[0].hours_old == 48 and qs[0].limit == 7
-    assert len(build_queries(cfg, max_queries=3)) == 3
-    assert build_queries(SearchConfig(queries=["x"], locations=[]))[0].location == ""
+def test_run_sources_isolates_failures_and_dedupes(monkeypatch):
+    class Fake:
+        provider = "greenhouse"
 
+        def fetch(self, src):
+            if src.id == "broken":
+                raise ConnectorError("boom")
+            return [
+                P("AI Engineer"),
+                P("AI Engineer", url="https://x/1?utm=z"),
+                P("Data Scientist", url="https://x/2"),
+                P("Old", url="https://x/3"),
+            ]
 
-def test_run_search_filters_seen_blocked_and_duplicates_and_isolates_errors():
-    li = "https://www.linkedin.com/jobs/view/111"
-    fake = FakeConnector({
-        "ml": [P("Acme", "ML Engineer", li), P("Acme", "ML Engineer", li + "?trk=x"),
-               P("SpamAgency Ltd", "ML Engineer", "https://x/2"), P("Seen Co", "ML", "https://x/3")],
-        "ds": [P("Beta", "Data Scientist")],
-    }, fail_on="broken")
-    cfg = SearchConfig(queries=["ml", "broken", "ds"], locations=["London"],
-                       blocklist=["spamagency"])
-    postings, errors = run_search(fake, cfg, seen={"url:https://x/3"})
-    assert [(p.company, p.title) for p in postings] == [
-        ("Acme", "ML Engineer"), ("Beta", "Data Scientist")]
-    assert list(errors) == ["broken @ London"] and "boom" in errors["broken @ London"]
-    assert len(fake.queries) == 3
-
-
-def test_rows_to_postings_cleans_scraper_output():
-    rows = [
-        {"title": " AI Engineer ", "company": "Acme", "location": "London, England",
-         "job_url": "https://www.linkedin.com/jobs/view/5", "date_posted": "2026-09-11",
-         "description": "  lots   of  text " * 100},
-        {"title": "No company", "company": None, "job_url": "https://x"},
-        {"title": "Nan date", "company": "Beta", "date_posted": "nan", "description": None},
+    sources = [
+        SRC,
+        SourceEntry(id="broken", provider="greenhouse", label="B", config={"board": "b"}),
+        SourceEntry(
+            id="off", provider="greenhouse", label="Off", enabled=False, config={"board": "o"}
+        ),
     ]
-    out = _rows_to_postings(rows, with_description=True)
-    assert [p.company for p in out] == ["Acme", "Beta"]
-    assert out[0].title == "AI Engineer" and out[0].posted == "2026-09-11"
-    assert out[0].source == "linkedin"
-    assert len(out[0].description) <= 600 and "  " not in out[0].description
-    assert out[1].posted == "" and out[1].description == ""
-    assert _rows_to_postings(rows, with_description=False)[0].description == ""
+    postings, errors = run_sources(
+        sources, SearchConfig(), seen={"url:https://x/3"}, connectors={"greenhouse": Fake()}
+    )
+    assert [p.title for p in postings] == ["AI Engineer", "Data Scientist"]
+    assert list(errors) == ["broken"] and "boom" in errors["broken"]
 
 
-def test_linkedin_connector_wraps_scraper_failures(monkeypatch):
-    c = LinkedInConnector()
-    def boom(self, q):
-        raise RuntimeError("429")
+def test_board_mappers_use_published_shapes(monkeypatch):
+    calls = []
 
-    monkeypatch.setattr(LinkedInConnector, "_scrape", boom)
-    with pytest.raises(ConnectorError, match="RuntimeError: 429"):
-        c.search(SearchQuery(term="x"))
-    monkeypatch.setattr(LinkedInConnector, "_scrape",
-                        lambda self, q: [{"title": "T", "company": "C", "job_url": "https://u"}])
-    assert c.search(SearchQuery(term="x"))[0].candidate.company == "C"
+    def fake_get(url, **kw):
+        calls.append(url)
+        if "greenhouse" in url:
+            return {
+                "jobs": [
+                    {
+                        "title": "ML Engineer",
+                        "location": {"name": "London"},
+                        "absolute_url": "https://boards.greenhouse.io/acme/jobs/1",
+                        "updated_at": "2026-09-10T10:00:00Z",
+                    }
+                ]
+            }
+        if "lever" in url:
+            return [
+                {
+                    "text": "Data Scientist",
+                    "categories": {"location": "London"},
+                    "allLocations": ["Remote"],
+                    "hostedUrl": "https://jobs.lever.co/acme/2",
+                    "createdAt": 1789171200000,
+                }
+            ]
+        if "ashby" in url:
+            return {
+                "jobs": [
+                    {
+                        "title": "SWE",
+                        "location": "London",
+                        "secondaryLocations": [],
+                        "jobUrl": "https://jobs.ashbyhq.com/acme/3",
+                        "publishedAt": "2026-09-11",
+                    }
+                ]
+            }
+        if "workable" in url:
+            return {
+                "jobs": [
+                    {
+                        "title": "AI Eng",
+                        "city": "London",
+                        "country": "UK",
+                        "url": "https://apply.workable.com/acme/j/4",
+                        "published_on": "2026-09-12",
+                    }
+                ]
+            }
+        return {
+            "content": [
+                {
+                    "name": "Analyst",
+                    "id": "5",
+                    "location": {"city": "London", "country": "UK"},
+                    "releasedDate": "2026-09-13T00:00:00Z",
+                }
+            ],
+            "totalFound": 1,
+        }
+
+    monkeypatch.setattr(boards, "_get", fake_get)
+    for provider in REGISTRY:
+        src = SourceEntry(id="acme", provider=provider, label="Acme", config={"board": "acme"})
+        out = create(provider).fetch(src)
+        assert len(out) == 1 and out[0].company == "Acme" and out[0].source == provider
+        assert out[0].url.startswith("https://") and out[0].posted.startswith("2026-09-1")
+    assert len(calls) == 5
+    with pytest.raises(ConnectorError, match="no config.board"):
+        create("greenhouse").fetch(SourceEntry(id="x", provider="greenhouse", label="X"))
 
 
-def test_seen_store_persists(tmp_path):
-    s = SeenPostings(tmp_path / "seen.json")
-    s.mark(["li:1", "li:2"], on=date(2026, 9, 12))
-    assert "li:1" in s and len(s) == 2
-    again = SeenPostings(tmp_path / "seen.json")
-    assert again.keys() == {"li:1", "li:2"}
-    again.mark({"li:1"}, on=date(2026, 9, 13))  # first-seen date is kept
-    assert again._seen["li:1"] == "2026-09-12"
+def test_sources_yaml_loads(tmp_path):
+    (tmp_path / "sources.yaml").write_text(
+        "sources:\n  - {id: figma, provider: greenhouse, label: Figma, config: {board: figma}}\n"
+        "  - {id: openai, provider: ashby, label: OpenAI, enabled: false, "
+        "config: {board: openai}}\n"
+    )
+    srcs = load_sources(tmp_path)
+    assert [s.id for s in srcs] == ["figma", "openai"] and srcs[1].enabled is False

@@ -37,8 +37,8 @@ def test_missing_file_message_names_file(tmp_path):
 
 
 def test_validation_error_names_field(tmp_path):
-    (tmp_path / "search.yaml").write_text("locations: [London]\n")  # queries missing
-    with pytest.raises(ConfigError, match="queries"):
+    (tmp_path / "search.yaml").write_text("locations: London\n")  # must be a list
+    with pytest.raises(ConfigError, match="locations"):
         load_search(tmp_path)
 
 

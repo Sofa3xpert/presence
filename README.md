@@ -32,7 +32,7 @@ being extracted from a private pipeline that has run in production since
 August 2026 (6 agents, 7 connector types, 587 tracked applications).
 
 **v1 scope** (see the architecture document, coming to `docs/`):
-one source (LinkedIn), two agents (Scout + Brief), SQLite tracker,
+the user's chosen job boards (published APIs only), two agents (Scout + Brief), SQLite tracker,
 Telegram delivery, BYO model key (Anthropic / OpenAI / Ollama), Docker,
 conversational onboarding from an uploaded CV plus five questions.
 
@@ -42,7 +42,7 @@ conversational onboarding from an uploaded CV plus five questions.
 src/presence/
   core/        runtime: scheduler, agent executor, profile & rules, guards
   agents/      agent packs: Scout, Brief (versioned, user-editable prompts)
-  connectors/  job sources behind one interface (v1: LinkedIn)
+  connectors/  job sources behind one interface (published board APIs; catalog)
   adapters/    messenger transports (v1: Telegram)
   tracker/     SQLite tracker + conventions engine
   packs/       loaders for shareable packs (sims, drills — MIT-licensed formats)

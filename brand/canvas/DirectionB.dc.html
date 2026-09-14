@@ -1,0 +1,65 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=Archivo:wght@500;700&display=swap">
+  <style>
+    body { margin: 0; }
+    a { color: #e0a24a; } a:hover { color: #f0b660; }
+    @keyframes blink { 0%, 55% { opacity: 1; } 56%, 100% { opacity: 0; } }
+  </style>
+</helmet>
+<div style="width: 640px; height: 960px; box-sizing: border-box; padding: 40px; background: #0f1f1e; color: #e6eeec; font-family: Archivo, 'Helvetica Neue', Arial, sans-serif; display: flex; flex-direction: column; gap: 26px;">
+  <div style="display: flex; justify-content: space-between; align-items: baseline;">
+    <div style="font-family: 'IBM Plex Mono', Menlo, monospace; font-size: 11px; letter-spacing: 0.14em; text-transform: uppercase; color: #3fb8a5;">Direction B · Shows its work</div>
+    <div style="font-family: 'IBM Plex Mono', Menlo, monospace; font-size: 11px; color: #7f9a95;">axis: transparency as style</div>
+  </div>
+
+  <div style="display: flex; align-items: center; gap: 18px; padding: 34px 0 10px;">
+    <svg width="72" height="72" viewBox="0 0 72 72"><path d="M18 12 H10 V60 H18" fill="none" stroke="#3fb8a5" stroke-width="4" stroke-linecap="square"></path><path d="M54 12 H62 V60 H54" fill="none" stroke="#3fb8a5" stroke-width="4" stroke-linecap="square"></path><circle cx="36" cy="36" r="7" fill="#e0a24a"></circle></svg>
+    <div style="font-family: 'IBM Plex Mono', Menlo, monospace; font-size: 64px; line-height: 1; font-weight: 500; letter-spacing: -0.02em; display: flex; align-items: center;">presence<span style="display: inline-block; width: 0.5em; height: 0.95em; background: #3fb8a5; margin-left: 0.12em; animation: blink 1.2s steps(1) infinite;"></span></div>
+  </div>
+  <div style="font-size: 13px; color: #7f9a95; margin-top: -18px;">The mark is a bracketed dot: something present, held in scope. The cursor says it is working, and that you can see what it does.</div>
+
+  <div style="display: flex; gap: 10px;">
+    <div style="flex: 1; display: flex; flex-direction: column; gap: 6px;"><div style="height: 54px; background: #0f1f1e; border: 1px solid #244341;"></div><div style="font-family: 'IBM Plex Mono', Menlo, monospace; font-size: 10.5px; color: #7f9a95;">petrol #0F1F1E</div></div>
+    <div style="flex: 1; display: flex; flex-direction: column; gap: 6px;"><div style="height: 54px; background: #172b2a;"></div><div style="font-family: 'IBM Plex Mono', Menlo, monospace; font-size: 10.5px; color: #7f9a95;">panel #172B2A</div></div>
+    <div style="flex: 1; display: flex; flex-direction: column; gap: 6px;"><div style="height: 54px; background: #e6eeec;"></div><div style="font-family: 'IBM Plex Mono', Menlo, monospace; font-size: 10.5px; color: #7f9a95;">text #E6EEEC</div></div>
+    <div style="flex: 1; display: flex; flex-direction: column; gap: 6px;"><div style="height: 54px; background: #3fb8a5;"></div><div style="font-family: 'IBM Plex Mono', Menlo, monospace; font-size: 10.5px; color: #7f9a95;">teal #3FB8A5</div></div>
+    <div style="flex: 1; display: flex; flex-direction: column; gap: 6px;"><div style="height: 54px; background: #e0a24a;"></div><div style="font-family: 'IBM Plex Mono', Menlo, monospace; font-size: 10.5px; color: #7f9a95;">signal #E0A24A</div></div>
+  </div>
+
+  <div style="display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 18px;">
+    <div>
+      <div style="font-family: 'IBM Plex Mono', Menlo, monospace; font-size: 11px; letter-spacing: 0.12em; text-transform: uppercase; color: #7f9a95; margin-bottom: 8px;">Display · Archivo</div>
+      <div style="font-size: 30px; line-height: 1.1; font-weight: 700; letter-spacing: -0.015em;">Three roles. One first action.</div>
+    </div>
+    <div>
+      <div style="font-family: 'IBM Plex Mono', Menlo, monospace; font-size: 11px; letter-spacing: 0.12em; text-transform: uppercase; color: #7f9a95; margin-bottom: 8px;">Body · IBM Plex Mono</div>
+      <div style="font-family: 'IBM Plex Mono', Menlo, monospace; font-size: 13.5px; line-height: 1.55; color: #c9d6d3;">searched 6 queries · 41 postings · kept 3<br>your data: this machine only<br>spend today: 2,140 tokens of 200,000</div>
+    </div>
+  </div>
+
+  <div style="display: flex; gap: 14px; align-items: center; font-family: 'IBM Plex Mono', Menlo, monospace;">
+    <div style="border: 1px solid #244341; padding: 10px 16px; font-size: 18px;">presence<span style="color: #3fb8a5;">/</span>careers</div>
+    <div style="border: 1px solid #244341; padding: 10px 16px; font-size: 18px;">presence<span style="color: #3fb8a5;">/</span>study</div>
+  </div>
+
+  <div style="display: flex; flex-direction: column; gap: 8px;">
+    <div style="font-family: 'IBM Plex Mono', Menlo, monospace; font-size: 11px; letter-spacing: 0.12em; text-transform: uppercase; color: #7f9a95;">Voice · sample morning message</div>
+    <div style="max-width: 440px; background: #172b2a; border-left: 3px solid #3fb8a5; padding: 14px 16px; font-size: 14.5px; line-height: 1.5;">3 new roles kept from 41 seen. First action: the first one on the list, before noon. 2 replies overnight: 1 rejection (recorded), 1 interview invite — details below. Nothing was sent on your behalf.</div>
+  </div>
+
+  <div style="margin-top: auto; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 18px; font-size: 12.5px; line-height: 1.45; color: #7f9a95; border-top: 1px solid #244341; padding-top: 14px;">
+    <div><span style="color: #e6eeec; font-weight: 600;">Why it fits:</span> honesty made visible — counts, caps and "nothing sent" as the aesthetic; speaks to the technical early adopters who install first.</div>
+    <div><span style="color: #e6eeec; font-weight: 600;">Tradeoff:</span> can feel like a developer tool to a non-technical student; dark-first needs a careful light mode for documents and print.</div>
+  </div>
+</div>
+</x-dc>
+</body>
+</html>

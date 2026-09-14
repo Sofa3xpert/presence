@@ -1,17 +1,17 @@
-"""Job sources behind one interface. v1: LinkedIn (library-based search)."""
+"""Job sources behind one interface — published APIs only, chosen by the user."""
 
-from presence.connectors import linkedin  # noqa: F401  (registers "linkedin")
+from presence.connectors import boards  # noqa: F401  (registers the board providers)
 from presence.connectors.base import (
     REGISTRY,
     Connector,
     ConnectorError,
     Posting,
-    SearchQuery,
-    build_queries,
     create,
-    run_search,
+    matches,
+    run_sources,
 )
+from presence.connectors.catalog import CATALOG, available
 from presence.connectors.seen import SeenPostings
 
-__all__ = ["REGISTRY", "Connector", "ConnectorError", "Posting", "SearchQuery", "SeenPostings",
-           "build_queries", "create", "run_search"]
+__all__ = ["CATALOG", "REGISTRY", "Connector", "ConnectorError", "Posting", "SeenPostings",
+           "available", "create", "matches", "run_sources"]

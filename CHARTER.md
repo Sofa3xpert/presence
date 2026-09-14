@@ -8,8 +8,10 @@ the project's identity, not a feature.
 
 Presence contains no code path that submits, sends, or posts an application on
 a user's behalf. It finds roles, judges fit, prepares material, and reminds —
-the final act is always the user's. This also means: no code that defeats
-bot detection, CAPTCHAs, or rate limits, anywhere, ever.
+the final act is always the user's. And Presence never scrapes a website: it
+reads only interfaces a provider offers — published job-board APIs, or the
+user's own mailbox. No reverse-engineered endpoints, no bot-detection
+evasion, no CAPTCHAs, no rate-limit games, anywhere, ever.
 
 ## 2. No invented facts
 

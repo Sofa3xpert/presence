@@ -3,14 +3,15 @@ settings — YAML files validated by schema, with errors a person can act on.
 
 Three files live in the data directory:
     profile.yaml   confirmed facts about the customer (charter rule 2 lives here)
-    search.yaml    derived search parameters — queries, filters, blocklist
+    sources.yaml   which boards and companies to read (published APIs only)
+    search.yaml    the customer's filters — locations, title rules, blocklist
     presence.yaml  runtime: providers, agents, budget
 """
 
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Literal
+from typing import Any, Literal
 
 import yaml
 from pydantic import BaseModel, Field, ValidationError
@@ -40,13 +41,30 @@ class Profile(BaseModel):
 
 
 class SearchConfig(BaseModel):
-    queries: list[str]
-    locations: list[str]
+    """The customer's filters, applied to postings from every source."""
+
+    locations: list[str] = Field(default_factory=list)  # empty = anywhere
     remote_ok: bool = True
     max_experience_years: int = 2
-    blocklist: list[str] = Field(default_factory=list)
-    freshness_hours: int = 30  # only postings newer than this reach Scout
-    results_per_query: int = 20
+    title_include: list[str] = Field(default_factory=list)  # empty = keep all titles
+    title_exclude: list[str] = Field(default_factory=lambda: [
+        "senior", "staff", "principal", "lead", "manager", "director", "head of", "vp"])
+    blocklist: list[str] = Field(default_factory=list)  # companies never shown
+    freshness_hours: int = 24 * 14  # boards list long-open roles; two weeks by default
+
+
+class SourceEntry(BaseModel):
+    """One enabled source: a company's board on a published API (or, later, a mailbox)."""
+
+    id: str
+    provider: str
+    label: str = ""
+    enabled: bool = True
+    config: dict[str, Any] = Field(default_factory=dict)
+
+
+class SourcesConfig(BaseModel):
+    sources: list[SourceEntry] = Field(default_factory=list)
 
 
 class ProviderConfig(BaseModel):
@@ -102,6 +120,10 @@ def load_profile(data_dir: Path) -> Profile:
 
 def load_search(data_dir: Path) -> SearchConfig:
     return load_yaml_model(data_dir / "search.yaml", SearchConfig)
+
+
+def load_sources(data_dir: Path) -> list[SourceEntry]:
+    return load_yaml_model(data_dir / "sources.yaml", SourcesConfig).sources
 
 
 def load_app(data_dir: Path) -> AppConfig:
