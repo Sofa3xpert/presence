@@ -27,7 +27,8 @@ def _call(token: str, method: str, **payload: Any) -> Any:
         r = requests.post(API.format(token=token, method=method), json=payload, timeout=25)
         data = r.json()
     except Exception as exc:
-        raise TelegramError(f"{method}: {type(exc).__name__}: {str(exc)[:120]}") from exc
+        text = str(exc).replace(token, "<token>")  # the URL in a network error holds the token
+        raise TelegramError(f"{method}: {type(exc).__name__}: {text[:120]}") from exc
     if not data.get("ok"):
         raise TelegramError(f"{method}: {data.get('description', 'unknown error')}")
     return data["result"]

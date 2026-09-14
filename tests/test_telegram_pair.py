@@ -100,3 +100,15 @@ def test_bad_token_is_not_stored(tmp_path, monkeypatch):
     monkeypatch.setattr(server, "get_me", boom)
     r = c.post("/setup/telegram", data={"action": "save", "token": "bad"}, follow_redirects=True)
     assert b"Unauthorized" in r.data and "TELEGRAM_BOT_TOKEN" not in read_secrets(tmp_path)
+
+
+def test_network_errors_never_show_the_token(monkeypatch):
+    def boom(*a, **k):
+        raise ConnectionError("Max retries exceeded with url: /bot123:SECRET/getMe")
+    monkeypatch.setattr(telegram.requests, "post", boom)
+    try:
+        telegram._call("123:SECRET", "getMe")
+    except telegram.TelegramError as exc:
+        assert "SECRET" not in str(exc) and "<token>" in str(exc)
+    else:
+        raise AssertionError("expected a TelegramError")

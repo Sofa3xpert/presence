@@ -386,8 +386,9 @@ class Engine:
     def owns(self, pid: int) -> bool:
         """Is this pid running *our* engine binary (not the person's own Ollama)?"""
         cmd = _cmdline(pid)
-        if os.name == "nt":
-            return "ollama.exe" in cmd.lower()
+        if os.name == "nt":  # tasklist reports the image name, not the path
+            low = cmd.lower()
+            return "ollama.exe" in low or str(self.versions).lower() in low
         return str(self.versions) in cmd
 
     def saved_port(self) -> int | None:
