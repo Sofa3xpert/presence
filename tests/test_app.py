@@ -120,11 +120,8 @@ def test_model_tracker_and_filters_settings(client):
     assert read_yaml(data / "presence.yaml")["providers"]["local"]["base_url"].startswith(
         "http://localhost"
     )
-    c.post("/setup/tracker", data={"backend": "sheet", "sheet_id": "abc123"})
-    assert read_yaml(data / "presence.yaml")["tracker"] == {
-        "backend": "sheet",
-        "sheet_id": "abc123",
-    }
+    c.post("/setup/tracker", data={"backend": "sheet"})
+    assert read_yaml(data / "presence.yaml")["tracker"]["backend"] == "sheet"
     c.post(
         "/setup/filters",
         data={

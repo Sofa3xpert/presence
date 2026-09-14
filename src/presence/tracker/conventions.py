@@ -150,3 +150,37 @@ def link_key(url: str) -> str:
         if m:
             return prefix + m.group(1)
     return "url:" + bare
+
+
+# ---------------------------------------------------------------- status labels
+
+_STATUS_ALIASES = {
+    "to apply": "to_apply", "toapply": "to_apply", "new": "to_apply", "open": "to_apply",
+    "applied": "applied", "submitted": "applied",
+    "assessment": "assessment", "oa": "assessment", "test": "assessment",
+    "screening": "assessment",
+    "interview": "interview", "interviewing": "interview",
+    "interview done": "interview_done", "interviewed": "interview_done",
+    "rejected": "rejected", "reject": "rejected", "refused": "rejected",
+    "ignored": "ignored", "ignore": "ignored", "skip": "ignored", "skipped": "ignored",
+    "not applying": "ignored", "outdated": "ignored", "expired": "ignored", "closed": "ignored",
+    "withdrawn": "ignored", "not eligible": "ignored", "ineligible": "ignored",
+}
+
+
+def parse_status(label: str) -> str | None:
+    """A person's status label → canonical status, else None.
+    'Interview done', 'to-apply' and 'Ignored (under-qualified)' all resolve."""
+    key = re.sub(r"\(.*?\)", " ", label)
+    key = re.sub(r"[\s_\-]+", " ", key.strip().lower()).strip()
+    return _STATUS_ALIASES.get(key)
+
+
+def status_reason(label: str) -> str:
+    """The bracketed part of a label, e.g. 'under-qualified' — worth keeping as a note."""
+    m = re.search(r"\((.*?)\)", label)
+    return m.group(1).strip() if m else ""
+
+
+def show_status(status: str) -> str:
+    return status.replace("_", " ")

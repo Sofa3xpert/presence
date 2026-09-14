@@ -5,6 +5,8 @@
     presence cycle <data_dir> [--send]  fetch → filter → tracker → brief (Telegram with --send)
     presence telegram pair <data_dir> capture your chat id after you message your bot
     presence serve <data_dir> [--port] the local app: guided setup, tracker, run
+    presence sheet sync <data_dir>    mirror the tracker to the connected Google Sheet
+    presence import <data_dir> <csv>  bring an existing tracker in from a CSV export
 """
 
 from __future__ import annotations
@@ -159,6 +161,56 @@ def cmd_pair(data: Path) -> int:
     return 0
 
 
+def cmd_sheet_sync(data: Path) -> int:
+    from presence.adapters import gsheet
+    from presence.tracker import Tracker
+
+    tr = load_app(data).tracker
+    if tr.backend != "sheet" or not tr.sheet_id:
+        print("no Google Sheet connected — choose it in the app (presence serve)")
+        return 1
+    creds = gsheet.credentials(data)
+    if creds is None:
+        print("Google is not connected — sign in or add a service account in the app")
+        return 1
+    tracker = Tracker(data / "tracker.db")
+    try:
+        res = gsheet.sync(tracker, gsheet.SheetClient(creds), tr.sheet_id, tr.tab,
+                          data / gsheet.STATE_FILE)
+    except gsheet.SheetError as exc:
+        print(exc)
+        return 1
+    finally:
+        tracker.close()
+    print("synced:", res.summary())
+    for line in res.pulled + res.issues:
+        print(" ", line)
+    return 0 if not res.issues else 2
+
+
+def cmd_import(data: Path, csv_path: Path) -> int:
+    import csv
+    from datetime import date
+
+    from presence.tracker import Tracker
+    from presence.tracker.importer import import_rows
+
+    rows = list(csv.reader(csv_path.open(newline="", encoding="utf-8-sig")))
+    if len(rows) < 2:
+        print("that CSV has no rows under its header")
+        return 1
+    tracker = Tracker(data / "tracker.db")
+    try:
+        rep = import_rows(tracker, rows[0], rows[1:], year=date.today().year,
+                          source_default="csv-import")
+    finally:
+        tracker.close()
+    print("imported:", rep.summary())
+    for line in rep.issues:
+        print(" ", line)
+    return 0
+
+
 def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(prog="presence", description=__doc__,
                                  formatter_class=argparse.RawDescriptionHelpFormatter)
@@ -173,6 +225,11 @@ def main(argv: list[str] | None = None) -> int:
             sp.add_argument("--port", type=int, default=8790)
     tg = sub.add_parser("telegram").add_subparsers(dest="tg", required=True)
     tg.add_parser("pair").add_argument("data", type=Path)
+    sh = sub.add_parser("sheet").add_subparsers(dest="sheet", required=True)
+    sh.add_parser("sync").add_argument("data", type=Path)
+    imp = sub.add_parser("import")
+    imp.add_argument("data", type=Path)
+    imp.add_argument("csv", type=Path)
     args = ap.parse_args(argv)
     if args.cmd == "init":
         return cmd_init(args.data)
@@ -182,6 +239,10 @@ def main(argv: list[str] | None = None) -> int:
         return cmd_cycle(args.data, args.send)
     if args.cmd == "serve":
         return cmd_serve(args.data, args.port)
+    if args.cmd == "sheet":
+        return cmd_sheet_sync(args.data)
+    if args.cmd == "import":
+        return cmd_import(args.data, args.csv)
     return cmd_pair(args.data)
 
 

@@ -84,6 +84,9 @@ class AgentRuntimeConfig(BaseModel):
 class TrackerChoice(BaseModel):
     backend: Literal["sqlite", "sheet"] = "sqlite"
     sheet_id: str = ""
+    sheet_url: str = ""
+    tab: str = "Tracker"
+    share_with: str = ""
 
 
 class AppConfig(BaseModel):

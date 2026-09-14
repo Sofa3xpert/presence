@@ -5,6 +5,8 @@ from __future__ import annotations
 from datetime import date
 from pathlib import Path
 
+import yaml
+
 from presence.adapters import ConsoleMessenger, TelegramError, TelegramMessenger
 from presence.agents.brief import compose_brief
 from presence.connectors import SeenPostings, run_sources
@@ -17,6 +19,26 @@ from presence.tracker.conventions import link_key
 def telegram_for(data: Path) -> TelegramMessenger | None:
     token, chat = get_secret("TELEGRAM_BOT_TOKEN", data), get_secret("TELEGRAM_CHAT_ID", data)
     return TelegramMessenger(token, chat) if token and chat else None
+
+
+def sheet_sync_if_configured(data: Path, tracker: Tracker) -> str | None:
+    """Mirror the tracker to the chosen Google Sheet. Returns an error text, or None."""
+    cfg_path = data / "presence.yaml"
+    cfg = (yaml.safe_load(cfg_path.read_text()) or {}) if cfg_path.exists() else {}
+    tr = cfg.get("tracker") or {}
+    if tr.get("backend") != "sheet" or not tr.get("sheet_id"):
+        return None
+    from presence.adapters import gsheet  # lazy: google-auth only when a sheet is used
+
+    creds = gsheet.credentials(data)
+    if creds is None:
+        return "a Google Sheet is chosen but Google is not connected"
+    try:
+        gsheet.sync(tracker, gsheet.SheetClient(creds), tr["sheet_id"], tr.get("tab") or "Tracker",
+                    data / gsheet.STATE_FILE)
+    except gsheet.SheetError as exc:
+        return str(exc)
+    return None
 
 
 def run_cycle(data: Path, send: bool = False) -> tuple[str, dict[str, str], bool]:
@@ -32,6 +54,9 @@ def run_cycle(data: Path, send: bool = False) -> tuple[str, dict[str, str], bool
             job for p in postings for job, created in [tracker.ingest(p.candidate)] if created
         ]
         seen.mark([link_key(p.url) for p in postings if p.url])
+        sheet_error = sheet_sync_if_configured(data, tracker)
+        if sheet_error:
+            errors["google sheet"] = sheet_error
         brief = compose_brief(tracker, new_jobs, errors, today=date.today())
     finally:
         tracker.close()
@@ -45,4 +70,5 @@ def run_cycle(data: Path, send: bool = False) -> tuple[str, dict[str, str], bool
     return brief, errors, delivered
 
 
-__all__ = ["ConsoleMessenger", "TelegramError", "run_cycle", "telegram_for"]
+__all__ = ["ConsoleMessenger", "TelegramError", "run_cycle", "sheet_sync_if_configured",
+           "telegram_for"]

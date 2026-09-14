@@ -3,6 +3,8 @@ never leaves this machine, and neither does this page."""
 
 from __future__ import annotations
 
+import csv
+import io
 import json
 import secrets as pysecrets
 from datetime import date
@@ -15,6 +17,7 @@ from presence.adapters import (
     TelegramError,
     TelegramMessenger,
     get_me,
+    gsheet,
     pair,
     pair_once,
     pairing_link,
@@ -28,6 +31,7 @@ from presence.core.config import ConfigError
 from presence.cycle import run_cycle
 from presence.tracker import STATUSES, Tracker
 from presence.tracker.conventions import ConventionError
+from presence.tracker.importer import import_rows
 
 DEFAULT_MODELS = {
     "local": "qwen3.5:9b",
@@ -38,6 +42,11 @@ DEFAULT_MODELS = {
 
 def _csv(value: str) -> list[str]:
     return [v.strip() for v in (value or "").split(",") if v.strip()]
+
+
+def sheet_client_for(data: Path) -> Any:
+    creds = gsheet.credentials(data)
+    return gsheet.SheetClient(creds) if creds is not None else None
 
 
 def _bot(data: Path) -> dict[str, Any]:
@@ -84,10 +93,12 @@ def _state(data: Path) -> dict[str, Any]:
         "pair_qr": qr.data_uri(pair_link) if pair_link else "",
         "botfather_qr": qr.data_uri("https://t.me/BotFather"),
         "chat_id": sec.get("TELEGRAM_CHAT_ID", ""),
-        "tracker": {
-            "backend": (app_cfg.get("tracker") or {}).get("backend", "sqlite"),
-            "sheet_id": (app_cfg.get("tracker") or {}).get("sheet_id", ""),
-        },
+        "tracker": {"backend": "sqlite", "sheet_id": "", "sheet_url": "", "tab": "Tracker",
+                    "share_with": "", **(app_cfg.get("tracker") or {})},
+        "google": gsheet.connection(data),
+        "oauth_running": gsheet.oauth_status(data)["running"],
+        "sheet_last": (json.loads((data / gsheet.STATE_FILE).read_text()).get("last", {})
+                       if (data / gsheet.STATE_FILE).exists() else {}),
         "profile": {
             "name": identity.get("name") or fields.get("name", ""),
             "email": identity.get("email") or fields.get("email", ""),
@@ -256,23 +267,180 @@ def create_app(data: Path) -> Flask:
         (data / "telegram_bot.json").write_text(json.dumps(bot))
         return jsonify({"paired": True, "chat_id": hit["chat_id"], "name": hit["name"]})
 
+    def _save_tracker(**fields: Any) -> dict[str, Any]:
+        cfg = read_yaml(data / "presence.yaml")
+        tr = cfg.get("tracker") or {}
+        tr.update(fields)
+        cfg["tracker"] = tr
+        write_yaml(data / "presence.yaml", cfg)
+        return tr
+
+    def _client_or_flash() -> Any:
+        client = sheet_client_for(data)
+        if client is None:
+            flash("connect Google first: sign in, or add a service account", "error")
+        return client
+
     @app.post("/setup/tracker")
     def setup_tracker():
-        cfg = read_yaml(data / "presence.yaml")
-        cfg["tracker"] = {
-            "backend": request.form.get("backend", "sqlite"),
-            "sheet_id": request.form.get("sheet_id", "").strip(),
-        }
-        write_yaml(data / "presence.yaml", cfg)
-        flash(
-            "tracker choice saved"
-            + (
-                " — Google Sheet sync arrives in a later version"
-                if cfg["tracker"]["backend"] == "sheet"
-                else ""
-            )
-        )
+        tr = _save_tracker(backend=request.form.get("backend", "sqlite"))
+        flash("tracker: " + ("Google Sheet mirror" if tr["backend"] == "sheet"
+                             else "SQLite on this machine"))
         return redirect(url_for("setup"))
+
+    @app.post("/google/service-account")
+    def google_service_account():
+        f = request.files.get("key")
+        if f is None or not f.filename:
+            flash("choose the service-account key file", "error")
+            return redirect(url_for("setup"))
+        try:
+            email = gsheet.save_service_account(data, f.read())
+        except gsheet.SheetError as exc:
+            flash(str(exc), "error")
+            return redirect(url_for("setup"))
+        flash(f"service account saved: {email}")
+        return redirect(url_for("setup"))
+
+    @app.post("/google/oauth/client")
+    def google_oauth_client():
+        f = request.files.get("client")
+        if f is None or not f.filename:
+            flash("choose the OAuth client file", "error")
+            return redirect(url_for("setup"))
+        try:
+            gsheet.save_oauth_client(data, f.read())
+        except gsheet.SheetError as exc:
+            flash(str(exc), "error")
+            return redirect(url_for("setup"))
+        flash("OAuth client saved — now press Connect Google")
+        return redirect(url_for("setup"))
+
+    @app.post("/google/oauth/start")
+    def google_oauth_start():
+        try:
+            gsheet.start_oauth(data)
+            flash("a Google sign-in opened in your browser — finish it there")
+        except gsheet.SheetError as exc:
+            flash(str(exc), "error")
+        return redirect(url_for("setup"))
+
+    @app.get("/google/oauth/status")
+    def google_oauth_status():
+        return jsonify(gsheet.oauth_status(data))
+
+    @app.post("/google/disconnect")
+    def google_disconnect():
+        gsheet.disconnect(data)
+        flash("Google disconnected — the sheet itself is untouched")
+        return redirect(url_for("setup"))
+
+    @app.post("/sheet/create")
+    def sheet_create():
+        client = _client_or_flash()
+        if client is None:
+            return redirect(url_for("setup"))
+        share_with = request.form.get("share_with", "").strip()
+        try:
+            sid, url = client.create(request.form.get("title", "").strip() or "Presence tracker",
+                                     "Tracker")
+            if share_with and gsheet.connection(data)["kind"] == "service_account":
+                client.share(sid, share_with)
+        except gsheet.SheetError as exc:
+            flash(str(exc), "error")
+            return redirect(url_for("setup"))
+        _save_tracker(backend="sheet", sheet_id=sid, sheet_url=url, tab="Tracker",
+                      share_with=share_with)
+        flash("sheet created — press Sync now to fill it")
+        return redirect(url_for("setup"))
+
+    @app.post("/sheet/connect")
+    def sheet_connect():
+        sid = gsheet.sheet_id_from(request.form.get("sheet", ""))
+        client = _client_or_flash()
+        if not sid or client is None:
+            if not sid:
+                flash("paste the sheet's link or ID", "error")
+            return redirect(url_for("setup"))
+        try:
+            url, tab = gsheet.connect_existing(client, sid)
+        except gsheet.SheetError as exc:
+            flash(str(exc), "error")
+            return redirect(url_for("setup"))
+        _save_tracker(backend="sheet", sheet_id=sid, sheet_url=url, tab=tab)
+        flash("sheet connected — press Sync now")
+        return redirect(url_for("setup"))
+
+    @app.post("/sheet/sync")
+    def sheet_sync():
+        tr = read_yaml(data / "presence.yaml").get("tracker") or {}
+        client = _client_or_flash()
+        if not tr.get("sheet_id") or client is None:
+            if not tr.get("sheet_id"):
+                flash("create or connect a sheet first", "error")
+            return redirect(url_for("setup"))
+        tracker = Tracker(data / "tracker.db")
+        try:
+            res = gsheet.sync(tracker, client, tr["sheet_id"], tr.get("tab") or "Tracker",
+                              data / gsheet.STATE_FILE)
+        except gsheet.SheetError as exc:
+            flash(str(exc), "error")
+            return redirect(url_for("setup"))
+        finally:
+            tracker.close()
+        flash("synced: " + res.summary())
+        for issue in res.issues[:5]:
+            flash(issue, "error")
+        return redirect(url_for("setup"))
+
+    @app.post("/sheet/import")
+    def sheet_import():
+        sid = gsheet.sheet_id_from(request.form.get("sheet", ""))
+        client = _client_or_flash()
+        if not sid or client is None:
+            if not sid:
+                flash("paste the link or ID of the sheet to import", "error")
+            return redirect(url_for("setup"))
+        try:
+            _url, tabs = client.info(sid)
+            rows = client.read(sid, gsheet.rng(tabs[0], "A1:Z")) if tabs else []
+        except gsheet.SheetError as exc:
+            flash(str(exc), "error")
+            return redirect(url_for("setup"))
+        if len(rows) < 2:
+            flash("that sheet has no rows under its header", "error")
+            return redirect(url_for("setup"))
+        tracker = Tracker(data / "tracker.db")
+        try:
+            rep = import_rows(tracker, rows[0], rows[1:], year=date.today().year,
+                              source_default="sheet-import")
+        finally:
+            tracker.close()
+        flash("imported: " + rep.summary())
+        for issue in rep.issues[:5]:
+            flash(issue, "error")
+        return redirect(url_for("tracker_page"))
+
+    @app.post("/tracker/import")
+    def tracker_import():
+        f = request.files.get("csv")
+        if f is None or not f.filename:
+            flash("choose a CSV file", "error")
+            return redirect(url_for("tracker_page"))
+        rows = list(csv.reader(io.StringIO(f.read().decode("utf-8-sig", errors="replace"))))
+        if len(rows) < 2:
+            flash("that CSV has no rows under its header", "error")
+            return redirect(url_for("tracker_page"))
+        tracker = Tracker(data / "tracker.db")
+        try:
+            rep = import_rows(tracker, rows[0], rows[1:], year=date.today().year,
+                              source_default="csv-import")
+        finally:
+            tracker.close()
+        flash("imported: " + rep.summary())
+        for issue in rep.issues[:5]:
+            flash(issue, "error")
+        return redirect(url_for("tracker_page"))
 
     @app.post("/setup/cv")
     def setup_cv():
