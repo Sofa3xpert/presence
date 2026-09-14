@@ -1,0 +1,8 @@
+{% extends "base.html" %}{% block content %}
+<h1>Run a cycle</h1>
+<p class="lede">Reads every enabled board through its published API, applies your filters, updates the tracker, and writes the brief. Nothing is ever sent on your behalf.</p>
+<form method="post" action="{{ url_for('run_now') }}"><button>Run now</button><button name="send" value="1" class="quiet">Run and send to Telegram</button></form>
+{% if brief %}<h2 style="margin-top:20px">Latest brief</h2><pre class="brief">{{ brief }}</pre>{% endif %}
+{% if errors %}<div class="log">{% for k, v in errors.items() %}{{ k }}: {{ v }}
+{% endfor %}</div>{% endif %}
+{% endblock %}

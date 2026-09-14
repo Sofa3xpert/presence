@@ -1,0 +1,80 @@
+{% extends "base.html" %}{% block content %}
+<h1>Set up Presence</h1>
+<p class="lede">Six short steps. Everything you enter stays in <span class="mono">{{ data_dir }}</span> on this machine.</p>
+
+<section class="step {{ 'done' if state.model_done else 'todo' }}"><h2>1 · Model</h2>
+<p class="hint">Local is free and private (Ollama on this machine). An API key is optional.</p>
+<form method="post" action="{{ url_for('setup_model') }}">
+  <label>Provider<select name="kind"><option value="local" {{ 'selected' if state.model.kind == 'local' }}>Local — Ollama</option><option value="anthropic" {{ 'selected' if state.model.kind == 'anthropic' }}>Anthropic (API key)</option><option value="openai" {{ 'selected' if state.model.kind == 'openai' }}>OpenAI (API key)</option></select></label>
+  <label>Model name<input type="text" name="model" value="{{ state.model.model }}" placeholder="qwen3.5:9b"></label>
+  <label>Local server URL<input type="url" name="base_url" value="{{ state.model.base_url }}" placeholder="http://localhost:11434/v1"></label>
+  <label>API key (if not local)<input type="password" name="api_key" placeholder="{{ 'saved' if state.model.has_key else 'sk-…' }}"></label>
+  <button>Save model</button>
+</form></section>
+
+<section class="step {{ 'done' if state.telegram_paired else 'todo' }}"><h2>2 · Telegram</h2>
+<p class="hint">Create a bot with @BotFather, paste its token, then send the bot any message and click Pair.</p>
+<form method="post" action="{{ url_for('setup_telegram') }}">
+  <label>Bot token<input type="password" name="token" placeholder="{{ 'saved' if state.telegram_token else '123456:ABC…' }}"></label>
+  <button name="action" value="save">Save token</button>
+  <button name="action" value="pair" class="quiet">Pair (waits up to 20 s)</button>
+  <button name="action" value="test" class="quiet">Send a test message</button>
+  {% if state.telegram_paired %}<span class="pill on">paired · chat {{ state.chat_id }}</span>{% endif %}
+</form></section>
+
+<section class="step done"><h2>3 · Tracker</h2>
+<p class="hint">SQLite on this machine is the default and is shown on the Tracker page. A Google Sheet can be chosen now; syncing to it arrives in a later version.</p>
+<form method="post" action="{{ url_for('setup_tracker') }}">
+  <label>Backend<select name="backend"><option value="sqlite" {{ 'selected' if state.tracker.backend == 'sqlite' }}>SQLite (local, default)</option><option value="sheet" {{ 'selected' if state.tracker.backend == 'sheet' }}>Google Sheet (planned sync)</option></select></label>
+  <label>Sheet ID (if chosen)<input type="text" name="sheet_id" value="{{ state.tracker.sheet_id }}"></label>
+  <button>Save tracker</button>
+</form></section>
+
+<section class="step {{ 'done' if state.profile_confirmed else 'todo' }}"><h2>4 · Your CV</h2>
+<p class="hint">Upload a PDF. Presence reads it locally and fills the form; you correct it and confirm. Nothing runs before you confirm.</p>
+<form method="post" action="{{ url_for('setup_cv') }}" enctype="multipart/form-data">
+  <label>CV (PDF)<input type="file" name="cv" accept="application/pdf"></label>
+  <button class="quiet">Read my CV</button>
+  {% if state.cv_chars %}<span class="tag">last read: {{ state.cv_chars }} characters</span>{% endif %}
+</form>
+<form method="post" action="{{ url_for('setup_profile') }}" class="stack" style="margin-top:12px">
+  <div class="row">
+    <label>Name<input type="text" name="name" value="{{ state.profile.name }}"></label>
+    <label>Email<input type="text" name="email" value="{{ state.profile.email }}"></label>
+    <label>Phone<input type="text" name="phone" value="{{ state.profile.phone }}"></label>
+  </div>
+  <label>Work authorization (say it plainly — this drives hard rules)<input type="text" name="work_auth" value="{{ state.profile.work_auth }}" placeholder="e.g. UK Graduate visa, full right to work, no sponsorship needed"></label>
+  <label>Skills (comma-separated)<textarea name="skills">{{ state.profile.skills }}</textarea></label>
+  <label>Links<input type="text" name="links" value="{{ state.profile.links }}"></label>
+  <label style="flex-direction:row;align-items:center;gap:8px"><input type="checkbox" name="confirmed" value="1" {{ 'checked' if state.profile_confirmed }}> I have checked these facts — Presence may use them</label>
+  <div><button>Save profile</button></div>
+</form></section>
+
+<section class="step {{ 'done' if state.sources else 'todo' }}"><h2>5 · Boards</h2>
+<p class="hint">Presence reads published job-board APIs only. Add a company by pasting its careers URL, or pick the provider and type the board token.</p>
+<form method="post" action="{{ url_for('sources_add') }}">
+  <label>Careers URL<input type="url" name="url" placeholder="https://boards.greenhouse.io/figma"></label>
+  <span class="tag">or</span>
+  <label>Provider<select name="provider">{% for c in catalog %}<option value="{{ c.provider }}">{{ c.name }}</option>{% endfor %}</select></label>
+  <label>Board token<input type="text" name="board" placeholder="figma"></label>
+  <label>Company name<input type="text" name="label" placeholder="Figma"></label>
+  <button>Add board</button>
+</form>
+{% if state.sources %}<table style="margin-top:12px"><tr><th>Company</th><th>Provider</th><th>Token</th><th>State</th><th></th></tr>
+{% for s in state.sources %}<tr><td>{{ s.label }}</td><td class="mono">{{ s.provider }}</td><td class="mono">{{ s.config.board }}</td><td><span class="pill {{ 'on' if s.enabled else 'off' }}">{{ 'on' if s.enabled else 'off' }}</span></td>
+<td><form method="post" action="{{ url_for('sources_toggle', sid=s.id) }}" style="display:inline"><button class="quiet">{{ 'disable' if s.enabled else 'enable' }}</button></form>
+<form method="post" action="{{ url_for('sources_remove', sid=s.id) }}" style="display:inline"><button class="danger">remove</button></form></td></tr>{% endfor %}</table>{% endif %}
+<p class="hint" style="margin-top:10px">On hold in the catalog (terms under review): {% for c in catalog_hold %}{{ c.name }}{{ ', ' if not loop.last }}{% endfor %}. Planned: your own job-alert emails.</p>
+</section>
+
+<section class="step done"><h2>6 · Filters</h2>
+<form method="post" action="{{ url_for('setup_filters') }}" class="stack">
+  <div class="row">
+    <label>Locations (comma-separated; empty = anywhere)<input type="text" name="locations" value="{{ state.filters.locations }}"></label>
+    <label>Title must contain one of<input type="text" name="title_include" value="{{ state.filters.title_include }}"></label>
+    <label>Title must not contain<input type="text" name="title_exclude" value="{{ state.filters.title_exclude }}"></label>
+    <label>Freshness (days)<input type="number" name="freshness_days" value="{{ state.filters.freshness_days }}" min="1" max="90"></label>
+  </div>
+  <div><button>Save filters</button></div>
+</form></section>
+{% endblock %}

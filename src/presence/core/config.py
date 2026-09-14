@@ -81,10 +81,16 @@ class AgentRuntimeConfig(BaseModel):
     max_output_tokens: int = 1024
 
 
+class TrackerChoice(BaseModel):
+    backend: Literal["sqlite", "sheet"] = "sqlite"
+    sheet_id: str = ""
+
+
 class AppConfig(BaseModel):
     providers: dict[str, ProviderConfig]
     agents: dict[str, AgentRuntimeConfig]
     budget_tokens_per_day: int = 200_000
+    tracker: TrackerChoice = Field(default_factory=TrackerChoice)
 
 
 def load_yaml_model[M: BaseModel](path: Path, model: type[M]) -> M:

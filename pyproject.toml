@@ -9,6 +9,8 @@ authors = [{ name = "Denis Baldakov" }]
 keywords = ["job-search", "agents", "local-first", "telegram", "career"]
 dependencies = [
     "anthropic>=0.40",
+    "flask>=3.0",
+    "pymupdf>=1.24",
     "openai>=1.55",
     "pydantic>=2.7",
     "requests>=2.31",

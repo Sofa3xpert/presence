@@ -4,6 +4,7 @@
     presence check <data_dir>         validate config, sources and delivery
     presence cycle <data_dir> [--send]  fetch → filter → tracker → brief (Telegram with --send)
     presence telegram pair <data_dir> capture your chat id after you message your bot
+    presence serve <data_dir> [--port] the local app: guided setup, tracker, run
 """
 
 from __future__ import annotations
@@ -11,17 +12,13 @@ from __future__ import annotations
 import argparse
 import os
 import sys
-from datetime import date
 from pathlib import Path
 
 from presence import __version__
-from presence.adapters import ConsoleMessenger, TelegramError, TelegramMessenger, pair
-from presence.agents.brief import compose_brief
-from presence.connectors import SeenPostings, run_sources
+from presence.adapters import TelegramError, TelegramMessenger, pair
 from presence.core.config import ConfigError, load_app, load_profile, load_search, load_sources
 from presence.core.secrets import get_secret
-from presence.tracker import Tracker
-from presence.tracker.conventions import link_key
+from presence.cycle import run_cycle
 
 EXAMPLES = {
     "profile.yaml": """# Facts Presence may use. Nothing runs until you set confirmed: true.
@@ -118,30 +115,26 @@ def cmd_check(data: Path) -> int:
 
 def cmd_cycle(data: Path, send: bool) -> int:
     try:
-        load_profile(data)  # refuses an unconfirmed profile — charter rule 2
-        search, sources = load_search(data), load_sources(data)
+        brief, errors, delivered = run_cycle(data, send=send)
     except ConfigError as exc:
         print(exc)
         return 1
-    seen = SeenPostings(data / "seen.json")
-    tracker = Tracker(data / "tracker.db")
-    postings, errors = run_sources(sources, search, seen=seen.keys())
-    new_jobs = []
-    for p in postings:
-        job, created = tracker.ingest(p.candidate)
-        if created:
-            new_jobs.append(job)
-    seen.mark([link_key(p.url) for p in postings if p.url])
-    brief = compose_brief(tracker, new_jobs, errors, today=date.today())
-    messenger = (_telegram(data) if send else None) or ConsoleMessenger()
-    try:
-        messenger.send(brief)
     except TelegramError as exc:
-        print(f"telegram delivery failed: {exc}\n\n{brief}")
+        print(f"telegram delivery failed: {exc}")
         return 1
-    tracker.close()
-    if send and messenger.name == "console":
+    print(brief)
+    if send and not delivered:
         print("(not paired with Telegram — printed instead)")
+    return 0
+
+
+def cmd_serve(data: Path, port: int) -> int:
+    from presence.app import create_app  # lazy: Flask only when serving
+
+    if not any((data / n).exists() for n in EXAMPLES):
+        cmd_init(data)
+    print(f"Presence app: http://127.0.0.1:{port}  (data: {data}) — Ctrl-C to stop")
+    create_app(data).run(host="127.0.0.1", port=port, debug=False)
     return 0
 
 
@@ -171,11 +164,13 @@ def main(argv: list[str] | None = None) -> int:
                                  formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--version", action="version", version=f"presence {__version__}")
     sub = ap.add_subparsers(dest="cmd", required=True)
-    for name in ("init", "check", "cycle"):
+    for name in ("init", "check", "cycle", "serve"):
         sp = sub.add_parser(name)
         sp.add_argument("data", type=Path)
         if name == "cycle":
             sp.add_argument("--send", action="store_true", help="deliver via Telegram")
+        if name == "serve":
+            sp.add_argument("--port", type=int, default=8790)
     tg = sub.add_parser("telegram").add_subparsers(dest="tg", required=True)
     tg.add_parser("pair").add_argument("data", type=Path)
     args = ap.parse_args(argv)
@@ -185,6 +180,8 @@ def main(argv: list[str] | None = None) -> int:
         return cmd_check(args.data)
     if args.cmd == "cycle":
         return cmd_cycle(args.data, args.send)
+    if args.cmd == "serve":
+        return cmd_serve(args.data, args.port)
     return cmd_pair(args.data)
 
 

@@ -4,7 +4,7 @@ import json
 
 import pytest
 
-from presence import cli
+from presence import cli, cycle
 from presence.adapters import telegram
 from presence.adapters.telegram import chunks, latest_chat_id
 from presence.connectors import Posting
@@ -34,7 +34,7 @@ def test_cycle_fetches_filters_tracks_and_briefs(tmp_path, capsys, monkeypatch):
                          url="https://boards.greenhouse.io/figma/jobs/1", source="greenhouse")],
                 {"palantir": "HTTPError: 503"})
 
-    monkeypatch.setattr(cli, "run_sources", fake_run_sources)
+    monkeypatch.setattr(cycle, "run_sources", fake_run_sources)
     assert cli.main(["cycle", str(tmp_path)]) == 0
     out = capsys.readouterr().out
     assert "1 new role" in out and "Figma: Software Engineer, AI" in out
@@ -50,7 +50,7 @@ def test_cycle_sends_via_telegram_when_paired(tmp_path, monkeypatch):
     cli.main(["init", str(tmp_path)])
     _confirm(tmp_path)
     (tmp_path / "secrets.env").write_text("TELEGRAM_BOT_TOKEN=t0k\nTELEGRAM_CHAT_ID=42\n")
-    monkeypatch.setattr(cli, "run_sources", lambda *a, **k: ([], {}))
+    monkeypatch.setattr(cycle, "run_sources", lambda *a, **k: ([], {}))
     sent = []
     monkeypatch.setattr(telegram, "_call",
                         lambda token, method, **p: sent.append((method, p)) or {})
