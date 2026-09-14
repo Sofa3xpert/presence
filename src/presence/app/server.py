@@ -9,9 +9,10 @@ from datetime import date
 from pathlib import Path
 from typing import Any
 
-from flask import Flask, flash, redirect, render_template, request, url_for
+from flask import Flask, flash, jsonify, redirect, render_template, request, url_for
 
 from presence.adapters import TelegramError, TelegramMessenger, pair
+from presence.app import ollama
 from presence.app.boards_ui import detect
 from presence.app.config_io import read_secrets, read_yaml, write_secret, write_yaml
 from presence.app.cvparse import extract_text, guess_fields
@@ -143,6 +144,41 @@ def create_app(data: Path) -> Flask:
         cfg.setdefault("budget_tokens_per_day", 200_000)
         write_yaml(data / "presence.yaml", cfg)
         flash(f"model saved: {kind} · {model}")
+        return redirect(url_for("setup"))
+
+    @app.get("/ollama/status")
+    def ollama_status():
+        return jsonify(ollama.status())
+
+    @app.post("/ollama/start")
+    def ollama_start():
+        flash(ollama.start())
+        return redirect(url_for("setup"))
+
+    @app.post("/ollama/pull")
+    def ollama_pull():
+        model = request.form.get("model", "").strip() or ollama.status()["recommended"]
+        return jsonify(ollama.start_pull(model))
+
+    @app.get("/ollama/pull/status")
+    def ollama_pull_status():
+        return jsonify(ollama.pull_status(request.args.get("model", "")))
+
+    @app.post("/ollama/check")
+    def ollama_check():
+        model = request.form.get("model", "").strip()
+        ok, detail = ollama.readiness(model)
+        if ok:
+            cfg = read_yaml(data / "presence.yaml")
+            cfg["providers"] = {"local": {"kind": "openai-compatible",
+                                          "base_url": f"{ollama.DEFAULT_URL}/v1"}}
+            cfg["agents"] = {"scout": {"provider": "local", "model": model, "at": "08:00"},
+                             "brief": {"provider": "local", "model": model, "at": "09:00"}}
+            cfg.setdefault("budget_tokens_per_day", 200_000)
+            write_yaml(data / "presence.yaml", cfg)
+            flash(f"{model} is ready — {detail}; saved as your model")
+        else:
+            flash(f"{model}: {detail}", "error")
         return redirect(url_for("setup"))
 
     @app.post("/setup/telegram")

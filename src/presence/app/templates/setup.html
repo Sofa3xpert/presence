@@ -3,7 +3,59 @@
 <p class="lede">Six short steps. Everything you enter stays in <span class="mono">{{ data_dir }}</span> on this machine.</p>
 
 <section class="step {{ 'done' if state.model_done else 'todo' }}"><h2>1 · Model</h2>
-<p class="hint">Local is free and private (Ollama on this machine). An API key is optional.</p>
+<p class="hint">Local is free and private: Ollama runs the model on this machine. An API key is the alternative, below.</p>
+<div id="ollama" class="row" style="align-items:center;gap:12px;margin-bottom:12px">
+  <span class="pill" id="ollama-pill">checking…</span>
+  <span id="ollama-text" class="hint" style="margin:0"></span>
+  <a id="ollama-install" class="pill" href="#" target="_blank" rel="noopener" hidden>Install Ollama (official download)</a>
+  <form method="post" action="{{ url_for('ollama_start') }}" id="ollama-start" hidden><button class="quiet">Start Ollama</button></form>
+</div>
+<div id="ollama-model" class="row" style="align-items:flex-end;gap:12px;margin-bottom:12px" hidden>
+  <label>Model to pull<input type="text" id="pull-model" name="model" value=""></label>
+  <button type="button" class="quiet" id="pull-btn">Pull model</button>
+  <span id="pull-text" class="hint" style="margin:0"></span>
+  <form method="post" action="{{ url_for('ollama_check') }}" id="check-form"><input type="hidden" name="model" id="check-model"><button>Test and use this model</button></form>
+</div>
+<script>
+(function () {
+  const pill = document.getElementById('ollama-pill'), text = document.getElementById('ollama-text');
+  const install = document.getElementById('ollama-install'), start = document.getElementById('ollama-start');
+  const modelRow = document.getElementById('ollama-model'), modelIn = document.getElementById('pull-model');
+  const checkModel = document.getElementById('check-model'), pullText = document.getElementById('pull-text');
+  let pollTimer = null;
+  function render(s) {
+    install.hidden = true; start.hidden = true; modelRow.hidden = true;
+    if (s.running) {
+      pill.textContent = 'Ollama running' + (s.version ? ' · ' + s.version : ''); pill.className = 'pill on';
+      text.textContent = (s.models.length ? 'installed models: ' + s.models.join(', ') + '. ' : 'no models yet. ')
+        + 'Recommended for ' + (s.ram_gb ? s.ram_gb + ' GB' : 'this machine') + ': ' + s.recommended + ' (' + s.recommended_size + ').';
+      modelRow.hidden = false; if (!modelIn.value) modelIn.value = s.models.includes(s.recommended) || !s.models.length ? s.recommended : s.models[0];
+      checkModel.value = modelIn.value; clearInterval(pollTimer); pollTimer = null;
+    } else if (s.installed) {
+      pill.textContent = 'Ollama installed, not running'; pill.className = 'pill off'; start.hidden = false;
+      text.textContent = 'start it and this step continues by itself.';
+    } else {
+      pill.textContent = 'Ollama not found'; pill.className = 'pill off';
+      install.href = s.download_url; install.hidden = false;
+      text.textContent = 'install it from the official page for ' + s.system + ' — waiting until it appears…';
+    }
+  }
+  function poll() { fetch('{{ url_for('ollama_status') }}').then(r => r.json()).then(render).catch(() => {}); }
+  poll(); pollTimer = setInterval(poll, 4000);
+  modelIn.addEventListener('input', () => { checkModel.value = modelIn.value; });
+  document.getElementById('pull-btn').addEventListener('click', () => {
+    const model = modelIn.value.trim(); checkModel.value = model; pullText.textContent = 'starting…';
+    fetch('{{ url_for('ollama_pull') }}', { method: 'POST', body: new URLSearchParams({ model }) }).then(() => {
+      const t = setInterval(() => {
+        fetch('{{ url_for('ollama_pull_status') }}?model=' + encodeURIComponent(model)).then(r => r.json()).then(p => {
+          pullText.textContent = (p.error ? 'error: ' + p.error : p.status + (p.done_pct != null ? ' ' + p.done_pct + '%' : ''));
+          if (p.finished) { clearInterval(t); if (!p.error) pullText.textContent = 'pulled — now test it'; }
+        });
+      }, 2000);
+    });
+  });
+})();
+</script>
 <form method="post" action="{{ url_for('setup_model') }}">
   <label>Provider<select name="kind"><option value="local" {{ 'selected' if state.model.kind == 'local' }}>Local — Ollama</option><option value="anthropic" {{ 'selected' if state.model.kind == 'anthropic' }}>Anthropic (API key)</option><option value="openai" {{ 'selected' if state.model.kind == 'openai' }}>OpenAI (API key)</option></select></label>
   <label>Model name<input type="text" name="model" value="{{ state.model.model }}" placeholder="qwen3.5:9b"></label>
