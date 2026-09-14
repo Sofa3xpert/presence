@@ -190,7 +190,8 @@ def test_pidfile_handling(tmp_path, darwin, monkeypatch):
     ours = f"{eng.versions}/0.34.0/ollama serve"
     monkeypatch.setattr(ollama_embedded, "_cmdline", lambda pid: ours)
     assert eng.kill_stale() is True and killed == [os.getpid()] and not eng.pidfile.exists()
-    # a dead pid is just cleaned up
+    # a dead pid is just cleaned up (on Windows liveness is read from the command line)
+    monkeypatch.setattr(ollama_embedded, "_cmdline", lambda pid: "")
     eng.pidfile.write_text("999999999")
     assert eng.running_port() is None
     assert eng.kill_stale() is False
