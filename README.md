@@ -25,6 +25,30 @@ Four rules, enforced in code — see [CHARTER.md](CHARTER.md):
 3. **Your data stays on your machine.** No telemetry, no cloud account, no exceptions.
 4. **Hard daily spend cap.** The system can never surprise you with a bill.
 
+## Try it (developer preview)
+
+Nothing here is finished, but the loop runs end to end on published job-board
+APIs and delivers to your own Telegram bot:
+
+```bash
+git clone https://github.com/Sofa3xpert/presence.git && cd presence
+uv sync
+uv run presence init ~/presence-data          # writes example config files
+# edit ~/presence-data/profile.yaml (set confirmed: true), sources.yaml, search.yaml
+uv run presence check ~/presence-data
+uv run presence cycle ~/presence-data         # fetch → filter → tracker → brief (printed)
+# optional Telegram delivery: put your @BotFather token in secrets.env, message the bot, then
+uv run presence telegram pair ~/presence-data
+uv run presence cycle ~/presence-data --send
+```
+
+With Docker: `docker compose run --rm presence init /data`, then the same
+commands with `/data` (the `./data` folder on the host holds everything).
+
+Not there yet: Scout's judgment and tiering (the cycle currently applies your
+filters only), the local setup app, the Google Sheet tracker option, alert-email
+intake, scheduled runs. See the architecture document for the plan.
+
 ## Status: pre-alpha
 
 Nothing runnable yet — this repository is the foundation commit of a system
