@@ -1,12 +1,15 @@
 """The `presence` command — developer preview.
 
-    presence init <data_dir>          scaffold a data folder with example config
-    presence check <data_dir>         validate config, sources and delivery
-    presence cycle <data_dir> [--send]  fetch → filter → tracker → brief (Telegram with --send)
-    presence telegram pair <data_dir> capture your chat id after you message your bot
-    presence serve <data_dir> [--port] the local app: guided setup, tracker, run
-    presence sheet sync <data_dir>    mirror the tracker to the connected Google Sheet
-    presence import <data_dir> <csv>  bring an existing tracker in from a CSV export
+    presence init [data_dir]          scaffold a data folder with example config
+    presence check [data_dir]         validate config, sources and delivery
+    presence cycle [data_dir] [--send]  fetch → filter → tracker → brief (Telegram with --send)
+    presence telegram pair [data_dir] capture your chat id after you message your bot
+    presence serve [data_dir] [--port] the local app: guided setup, tracker, run
+    presence sheet sync [data_dir]    mirror the tracker to the connected Google Sheet
+    presence import <csv> [data_dir]  bring an existing tracker in from a CSV export
+
+The data folder defaults to the platform's app-data location (see presence.core.paths);
+PRESENCE_DATA overrides it.
 """
 
 from __future__ import annotations
@@ -19,6 +22,7 @@ from pathlib import Path
 from presence import __version__
 from presence.adapters import TelegramError, TelegramMessenger, pair
 from presence.core.config import ConfigError, load_app, load_profile, load_search, load_sources
+from presence.core.paths import resolve_data_dir
 from presence.core.secrets import get_secret
 from presence.cycle import run_cycle
 
@@ -218,19 +222,20 @@ def main(argv: list[str] | None = None) -> int:
     sub = ap.add_subparsers(dest="cmd", required=True)
     for name in ("init", "check", "cycle", "serve"):
         sp = sub.add_parser(name)
-        sp.add_argument("data", type=Path)
+        sp.add_argument("data", type=Path, nargs="?", default=None)
         if name == "cycle":
             sp.add_argument("--send", action="store_true", help="deliver via Telegram")
         if name == "serve":
             sp.add_argument("--port", type=int, default=8790)
     tg = sub.add_parser("telegram").add_subparsers(dest="tg", required=True)
-    tg.add_parser("pair").add_argument("data", type=Path)
+    tg.add_parser("pair").add_argument("data", type=Path, nargs="?", default=None)
     sh = sub.add_parser("sheet").add_subparsers(dest="sheet", required=True)
-    sh.add_parser("sync").add_argument("data", type=Path)
+    sh.add_parser("sync").add_argument("data", type=Path, nargs="?", default=None)
     imp = sub.add_parser("import")
-    imp.add_argument("data", type=Path)
     imp.add_argument("csv", type=Path)
+    imp.add_argument("data", type=Path, nargs="?", default=None)
     args = ap.parse_args(argv)
+    args.data = resolve_data_dir(args.data)
     if args.cmd == "init":
         return cmd_init(args.data)
     if args.cmd == "check":
