@@ -34,7 +34,8 @@ def sheet_sync_if_configured(data: Path, tracker: Tracker) -> str | None:
     if creds is None:
         return "a Google Sheet is chosen but Google is not connected"
     try:
-        gsheet.sync(tracker, gsheet.SheetClient(creds), tr["sheet_id"], tr.get("tab") or "Tracker",
+        client = gsheet.SheetClient(creds, data)
+        gsheet.sync(tracker, client, tr["sheet_id"], tr.get("tab") or "Tracker",
                     data / gsheet.STATE_FILE)
     except gsheet.SheetError as exc:
         return str(exc)

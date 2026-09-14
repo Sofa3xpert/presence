@@ -448,8 +448,8 @@ def create_app(data: Path) -> Flask:
     @app.post("/setup/tracker")
     def setup_tracker():
         tr = _save_tracker(backend=request.form.get("backend", "sqlite"))
-        flash("tracker: " + ("Google Sheet mirror" if tr["backend"] == "sheet"
-                             else "SQLite on this machine"))
+        flash("tracker: " + ("also in a Google Sheet" if tr["backend"] == "sheet"
+                             else "kept on this computer"))
         return redirect(url_for("setup"))
 
     @app.post("/google/service-account")

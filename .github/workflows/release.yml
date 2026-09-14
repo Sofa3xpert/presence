@@ -41,16 +41,7 @@ jobs:
       # the file does not exist yet.
       - name: Inject Google OAuth client id/secret
         if: env.PRESENCE_GOOGLE_CLIENT_ID != ''
-        run: |
-          f=src/presence/adapters/google_client.py
-          if [ ! -f "$f" ]; then echo "$f not present; skipping"; exit 0; fi
-          python3 - "$f" <<'PY'
-          import os, re, sys
-          p = sys.argv[1]; s = open(p).read()
-          s = re.sub(r'CLIENT_ID\s*=\s*"[^"]*"', 'CLIENT_ID = "%s"' % os.environ["PRESENCE_GOOGLE_CLIENT_ID"], s)
-          s = re.sub(r'CLIENT_SECRET\s*=\s*"[^"]*"', 'CLIENT_SECRET = "%s"' % os.environ["PRESENCE_GOOGLE_CLIENT_SECRET"], s)
-          open(p, "w").write(s)
-          PY
+        run: python3 scripts/inject_google_client.py
 
       - name: Import Developer ID certificate (optional)
         if: env.MACOS_CERT_P12_BASE64 != ''

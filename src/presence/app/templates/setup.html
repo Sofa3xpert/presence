@@ -124,7 +124,7 @@
 </ol>
 <figure class="qr"><img src="{{ state.botfather_qr }}" alt="QR code opening @BotFather" width="132" height="132"><figcaption>opens @BotFather</figcaption></figure>
 </div>
-<p class="hint">The token stays in <code>secrets.env</code> on this machine, readable only by you. Treat it like a password. If it ever leaks, send <code>/revoke</code> to BotFather and save the new one here.</p>
+<p class="hint">The token is kept on this computer, readable only by you. Treat it like a password. If it ever leaks, send <code>/revoke</code> to BotFather and save the new one here.</p>
 </details>
 <form method="post" action="{{ url_for('setup_telegram') }}">
   <label>Bot token<input type="password" name="token" placeholder="{{ 'saved · @' + state.bot.username if state.bot.username else '123456789:AAH…' }}"></label>
@@ -207,17 +207,11 @@
   <button>Create my tracker sheet</button>
 </form>
 {% else %}
-<div class="row" style="gap:24px;align-items:flex-start">
-<form method="post" action="{{ url_for('sheet_create') }}">
-  <label>Create a new sheet<input type="text" name="title" value="Presence tracker"></label>
-  <label>Share it with (your Google email)<input type="email" name="share_with" value="{{ state.tracker.share_with }}" placeholder="you@gmail.com"></label>
-  <button>Create sheet</button>
+<p class="hint">Google no longer lets a service account own a new sheet. Make a blank sheet in your own Drive, share it as editor with <span class="mono">{{ state.google.email }}</span>, then connect it here.</p>
+<form method="post" action="{{ url_for('sheet_connect') }}" class="row" style="align-items:flex-end;gap:12px">
+  <label>Blank sheet you made<input type="text" name="sheet" placeholder="sheet link or ID"></label>
+  <button>Connect</button>
 </form>
-<form method="post" action="{{ url_for('sheet_connect') }}">
-  <label>Or connect an empty sheet you made<input type="text" name="sheet" placeholder="sheet link or ID"></label>
-  <button class="quiet">Connect</button>
-</form>
-</div>
 {% endif %}
 <details><summary>Bring an existing tracker in</summary>
 <p class="hint">Rows from another spreadsheet (any columns: Company, Role, Link, Status, Applied, Location, Channel, Next action…) are added to the tracker once; duplicates are skipped and other columns are kept as extra fields.</p>

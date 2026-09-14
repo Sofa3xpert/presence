@@ -183,9 +183,9 @@ def smoke() -> int:
 
 
 def serve(data: Path, port: int) -> None:
-    from presence.app import create_app
+    from presence.app.run import serve as run_serve  # scheduler + /health, same as `presence serve`
 
-    create_app(data).run(host=HOST, port=port, debug=False, use_reloader=False)
+    run_serve(data, port=port, open_browser=False, block=True)
 
 
 def run_menu_bar(data: Path, port: int) -> None:

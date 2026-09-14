@@ -319,9 +319,13 @@ class SheetClient:
             d = self._req("POST", SHEETS, json=body)
         except SheetError as exc:
             if "403" in str(exc):
+                who = connection(self.data).get("email") if self.data else ""
+                if who:
+                    raise SheetError("Google no longer lets a service account own a new sheet. "
+                                     "Make a blank sheet in your own Drive, share it as editor "
+                                     f"with {who}, then connect it here.") from exc
                 raise SheetError(f"{exc} — creating a sheet needs the Google Drive API enabled "
-                                 "on the project this account belongs to (the Sheets API alone "
-                                 "only reads and writes existing sheets)") from exc
+                                 "on the project this account belongs to") from exc
             raise
         return d["spreadsheetId"], d["spreadsheetUrl"]
 

@@ -189,7 +189,7 @@ def cmd_sheet_sync(data: Path) -> int:
         return 1
     tracker = Tracker(data / "tracker.db")
     try:
-        res = gsheet.sync(tracker, gsheet.SheetClient(creds), tr.sheet_id, tr.tab,
+        res = gsheet.sync(tracker, gsheet.SheetClient(creds, data), tr.sheet_id, tr.tab,
                           data / gsheet.STATE_FILE)
     except gsheet.SheetError as exc:
         print(exc)

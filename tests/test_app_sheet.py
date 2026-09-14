@@ -129,7 +129,8 @@ def test_release_build_shows_one_button_then_makes_the_sheet(tmp_path, monkeypat
     c.post("/setup/tracker", data={"backend": "sheet"})
     page = c.get("/").data.decode()
     assert "Connect Google" in page and "only see the sheet it creates for you" in page
-    assert "Advanced" not in page and "Add client" not in page and "Add key" not in page
+    assert "isn't included in this build" not in page
+    assert "Add client" not in page and "Add key" not in page
     assert "Connect an empty sheet" not in page and "signing in" not in page
 
     started = {}
