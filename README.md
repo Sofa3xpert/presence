@@ -27,9 +27,15 @@ Four rules, enforced in code — see [CHARTER.md](CHARTER.md):
 
 ## Get Presence
 
-**macOS:** download the Presence app from the
-[GitHub Releases page](https://github.com/Sofa3xpert/presence/releases) and
-open it. That is the whole install.
+**macOS (Apple silicon, macOS 14 or newer):** download the Presence disk
+image from the [GitHub Releases page](https://github.com/Sofa3xpert/presence/releases),
+open it and drag **Presence** into **Applications**. That is the whole install.
+
+The first launch has one extra step, because the app is not yet registered
+with Apple: double-click Presence, click **Done** on the "Not Opened" message,
+then open **System Settings → Privacy & Security**, scroll to the Security
+section and click **Open Anyway**. Confirm with your Mac password. macOS
+remembers the choice and Presence opens normally from then on.
 
 **Windows and Linux:** a packaged app is on its way. Until then, the
 developer route below works on any machine with Python 3.12.
