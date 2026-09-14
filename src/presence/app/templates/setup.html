@@ -3,44 +3,89 @@
 <p class="lede">Six short steps. Everything you enter stays in <span class="mono">{{ data_dir }}</span> on this machine.</p>
 
 <section class="step {{ 'done' if state.model_done else 'todo' }}"><h2>1 · Model</h2>
-<p class="hint">Local is free and private: Ollama runs the model on this machine. An API key is the alternative, below.</p>
+<p class="hint">Local is free and private: the model runs on this machine and nothing leaves it. Presence brings its own local engine — no install, no terminal. An API key is the alternative, below.</p>
 <div id="ollama" class="row" style="align-items:center;gap:12px;margin-bottom:12px">
   <span class="pill" id="ollama-pill">checking…</span>
   <span id="ollama-text" class="hint" style="margin:0"></span>
-  <a id="ollama-install" class="pill" href="#" target="_blank" rel="noopener" hidden>Install Ollama (official download)</a>
+  <button type="button" id="engine-get" hidden>Get the local engine</button>
   <form method="post" action="{{ url_for('ollama_start') }}" id="ollama-start" hidden><button class="quiet">Start Ollama</button></form>
+  <button type="button" class="quiet" id="engine-start" hidden>Start the local engine</button>
 </div>
+<p id="engine-progress" class="hint" hidden></p>
 <div id="ollama-model" class="row" style="align-items:flex-end;gap:12px;margin-bottom:12px" hidden>
   <label>Model to pull<input type="text" id="pull-model" name="model" value=""></label>
   <button type="button" class="quiet" id="pull-btn">Pull model</button>
   <span id="pull-text" class="hint" style="margin:0"></span>
   <form method="post" action="{{ url_for('ollama_check') }}" id="check-form"><input type="hidden" name="model" id="check-model"><button>Test and use this model</button></form>
 </div>
+<p id="models-hint" class="hint" hidden></p>
 <script>
 (function () {
   const pill = document.getElementById('ollama-pill'), text = document.getElementById('ollama-text');
-  const install = document.getElementById('ollama-install'), start = document.getElementById('ollama-start');
+  const getBtn = document.getElementById('engine-get'), startSys = document.getElementById('ollama-start');
+  const startBtn = document.getElementById('engine-start'), progress = document.getElementById('engine-progress');
   const modelRow = document.getElementById('ollama-model'), modelIn = document.getElementById('pull-model');
   const checkModel = document.getElementById('check-model'), pullText = document.getElementById('pull-text');
-  let pollTimer = null;
+  const modelsHint = document.getElementById('models-hint');
+  let pollTimer = null, installing = false, autoStarted = false;
+  const mb = b => Math.round(b / 1048576);
+  function progressLine(d) {
+    if (d.phase === 'resolving') return 'Finding the latest local engine…';
+    if (d.phase === 'downloading') return 'Downloading the local engine · ' + mb(d.bytes_done) + ' of ' + (d.bytes_total ? mb(d.bytes_total) : '?') + ' MB';
+    if (d.phase === 'verifying') return 'Checking the download…';
+    if (d.phase === 'unpacking') return 'Unpacking…';
+    if (d.phase === 'starting') return 'Starting…';
+    if (d.phase === 'error') return 'Something went wrong: ' + d.error + ' — press the button to try again.';
+    return '';
+  }
   function render(s) {
-    install.hidden = true; start.hidden = true; modelRow.hidden = true;
+    const e = s.engine || {};
+    getBtn.hidden = true; startSys.hidden = true; startBtn.hidden = true; modelRow.hidden = true;
+    getBtn.textContent = 'Get the local engine' + (e.asset_size_mb ? ' (' + e.asset_size_mb + ' MB)' : '');
+    if (e.models_dir) {
+      modelsHint.hidden = false;
+      modelsHint.textContent = 'Models are kept in ' + e.models_dir + (e.models_size_gb ? ' · ' + e.models_size_gb + ' GB so far.' : ' · nothing there yet.');
+    }
     if (s.running) {
-      pill.textContent = 'Ollama running' + (s.version ? ' · ' + s.version : ''); pill.className = 'pill on';
+      pill.textContent = (e.kind === 'system' ? 'Your Ollama is running' : 'Local engine running') + (s.version ? ' · ' + s.version : ''); pill.className = 'pill on';
       text.textContent = (s.models.length ? 'installed models: ' + s.models.join(', ') + '. ' : 'no models yet. ')
         + 'Recommended for ' + (s.ram_gb ? s.ram_gb + ' GB' : 'this machine') + ': ' + s.recommended + ' (' + s.recommended_size + ').';
       modelRow.hidden = false; if (!modelIn.value) modelIn.value = s.models.includes(s.recommended) || !s.models.length ? s.recommended : s.models[0];
-      checkModel.value = modelIn.value; clearInterval(pollTimer); pollTimer = null;
+      checkModel.value = modelIn.value; if (!installing) progress.hidden = true;
+    } else if (installing) {
+      pill.textContent = 'Getting the local engine'; pill.className = 'pill off'; text.textContent = '';
+    } else if (e.installed) {
+      pill.textContent = 'Local engine ready, not running'; pill.className = 'pill off';
+      text.textContent = 'starting it now…'; startBtn.hidden = false;
+      if (!autoStarted) { autoStarted = true; startEngine(); }
     } else if (s.installed) {
-      pill.textContent = 'Ollama installed, not running'; pill.className = 'pill off'; start.hidden = false;
-      text.textContent = 'start it and this step continues by itself.';
+      pill.textContent = 'Ollama installed, not running'; pill.className = 'pill off'; startSys.hidden = false;
+      text.textContent = 'start it and this step continues by itself — or let Presence get its own engine.'; getBtn.hidden = false;
     } else {
-      pill.textContent = 'Ollama not found'; pill.className = 'pill off';
-      install.href = s.download_url; install.hidden = false;
-      text.textContent = 'install it from the official page for ' + s.system + ' — waiting until it appears…';
+      pill.textContent = 'No local engine yet'; pill.className = 'pill off';
+      text.textContent = e.supported ? 'one download, then models run here.' : 'no engine build for this computer — use an API key below.';
+      getBtn.hidden = !e.supported;
     }
   }
   function poll() { fetch('{{ url_for('ollama_status') }}').then(r => r.json()).then(render).catch(() => {}); }
+  function startEngine() {
+    progress.hidden = false; progress.textContent = 'Starting…';
+    fetch('{{ url_for('ollama_start') }}?json=1', { method: 'POST' }).then(r => r.json()).then(j => { progress.textContent = j.message; poll(); }).catch(() => {});
+  }
+  function watchInstall() {
+    const t = setInterval(() => {
+      fetch('{{ url_for('ollama_engine_status') }}').then(r => r.json()).then(e => {
+        const d = e.download || {};
+        progress.hidden = false; progress.textContent = progressLine(d);
+        if (d.finished) { clearInterval(t); installing = false; if (d.phase === 'ready') progress.textContent = 'The local engine is running.'; poll(); }
+      }).catch(() => {});
+    }, 1000);
+  }
+  getBtn.addEventListener('click', () => {
+    installing = true; getBtn.hidden = true; startSys.hidden = true; progress.hidden = false; progress.textContent = 'Starting the download…';
+    fetch('{{ url_for('ollama_engine_install') }}', { method: 'POST' }).then(watchInstall).catch(() => { installing = false; });
+  });
+  startBtn.addEventListener('click', startEngine);
   poll(); pollTimer = setInterval(poll, 4000);
   modelIn.addEventListener('input', () => { checkModel.value = modelIn.value; });
   document.getElementById('pull-btn').addEventListener('click', () => {
@@ -57,7 +102,7 @@
 })();
 </script>
 <form method="post" action="{{ url_for('setup_model') }}">
-  <label>Provider<select name="kind"><option value="local" {{ 'selected' if state.model.kind == 'local' }}>Local — Ollama</option><option value="anthropic" {{ 'selected' if state.model.kind == 'anthropic' }}>Anthropic (API key)</option><option value="openai" {{ 'selected' if state.model.kind == 'openai' }}>OpenAI (API key)</option></select></label>
+  <label>Provider<select name="kind"><option value="local" {{ 'selected' if state.model.kind == 'local' }}>Local — on this machine</option><option value="anthropic" {{ 'selected' if state.model.kind == 'anthropic' }}>Anthropic (API key)</option><option value="openai" {{ 'selected' if state.model.kind == 'openai' }}>OpenAI (API key)</option></select></label>
   <label>Model name<input type="text" name="model" value="{{ state.model.model }}" placeholder="qwen3.5:9b"></label>
   <label>Local server URL<input type="url" name="base_url" value="{{ state.model.base_url }}" placeholder="http://localhost:11434/v1"></label>
   <label>API key (if not local)<input type="password" name="api_key" placeholder="{{ 'saved' if state.model.has_key else 'sk-…' }}"></label>

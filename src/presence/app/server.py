@@ -176,14 +176,55 @@ def create_app(data: Path) -> Flask:
         flash(f"model saved: {kind} · {model}")
         return redirect(url_for("setup"))
 
+    ollama.bind(data)  # the embedded local engine lives in this data folder
+
+    def _save_local_model(model: str | None) -> None:
+        """Point the local provider at wherever the engine answers right now."""
+        cfg = read_yaml(data / "presence.yaml")
+        cfg["providers"] = {
+            "local": {"kind": "openai-compatible", "base_url": f"{ollama.resolve_base_url()}/v1"}
+        }
+        if model:
+            cfg["agents"] = {
+                "scout": {"provider": "local", "model": model, "at": "08:00"},
+                "brief": {"provider": "local", "model": model, "at": "09:00"},
+            }
+        cfg.setdefault("budget_tokens_per_day", 200_000)
+        write_yaml(data / "presence.yaml", cfg)
+
+    def _resync_local_url() -> None:
+        cfg = read_yaml(data / "presence.yaml")
+        local = (cfg.get("providers") or {}).get("local") or {}
+        if local and local.get("base_url") != f"{ollama.resolve_base_url()}/v1":
+            _save_local_model(None)
+
     @app.get("/ollama/status")
     def ollama_status():
         return jsonify(ollama.status())
 
     @app.post("/ollama/start")
     def ollama_start():
-        flash(ollama.start())
+        message = ollama.start()
+        _resync_local_url()
+        if request.args.get("json"):
+            return jsonify({"message": message, "engine": ollama.engine_info()})
+        flash(message)
         return redirect(url_for("setup"))
+
+    @app.post("/ollama/engine/install")
+    def ollama_engine_install():
+        return jsonify(ollama.bind(data).install_in_background())
+
+    @app.get("/ollama/engine/status")
+    def ollama_engine_status():
+        info = ollama.engine_info()
+        if info["download"].get("phase") == "ready":
+            _resync_local_url()
+        return jsonify(info)
+
+    @app.post("/ollama/engine/update")
+    def ollama_engine_update():
+        return jsonify(ollama.bind(data).check_update())
 
     @app.post("/ollama/pull")
     def ollama_pull():
@@ -199,13 +240,7 @@ def create_app(data: Path) -> Flask:
         model = request.form.get("model", "").strip()
         ok, detail = ollama.readiness(model)
         if ok:
-            cfg = read_yaml(data / "presence.yaml")
-            cfg["providers"] = {"local": {"kind": "openai-compatible",
-                                          "base_url": f"{ollama.DEFAULT_URL}/v1"}}
-            cfg["agents"] = {"scout": {"provider": "local", "model": model, "at": "08:00"},
-                             "brief": {"provider": "local", "model": model, "at": "09:00"}}
-            cfg.setdefault("budget_tokens_per_day", 200_000)
-            write_yaml(data / "presence.yaml", cfg)
+            _save_local_model(model)
             flash(f"{model} is ready — {detail}; saved as your model")
         else:
             flash(f"{model}: {detail}", "error")

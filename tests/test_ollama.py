@@ -8,9 +8,11 @@ def test_download_url_and_recommendation():
     assert ollama.download_url("Darwin").endswith("/mac")
     assert ollama.download_url("Windows").endswith("/windows")
     assert ollama.download_url("Plan9") == "https://ollama.com/download"
-    assert ollama.recommend_model(8)[0] == "llama3.2:3b"
+    assert ollama.recommend_model(4)[0] == "qwen3.5:2b"
+    assert ollama.recommend_model(8) == ("qwen3.5:4b", "about 3.4 GB")
     assert ollama.recommend_model(16)[0] == "qwen3.5:9b"
-    assert ollama.recommend_model(None)[0] == "qwen3.5:9b"
+    assert ollama.recommend_model(32)[0] == "qwen3.5:27b"
+    assert ollama.recommend_model(None)[0] == "qwen3.5:27b"
 
 
 def test_server_status_parses_and_fails_soft(monkeypatch):
@@ -95,7 +97,9 @@ def test_status_route_and_check_route_save_model(tmp_path, monkeypatch):
     assert b"is ready" in r.data
     from presence.app.config_io import read_yaml
 
-    assert read_yaml(tmp_path / "presence.yaml")["agents"]["scout"]["model"] == "qwen3.5:9b"
+    cfg = read_yaml(tmp_path / "presence.yaml")
+    assert cfg["agents"]["scout"]["model"] == "qwen3.5:9b"
+    assert cfg["providers"]["local"]["base_url"] == f"{ollama.DEFAULT_URL}/v1"
     monkeypatch.setattr(
         ollama, "readiness", lambda model, base_url=None: (False, "did not call the tool")
     )
