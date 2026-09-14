@@ -6,16 +6,24 @@ Status, Next action and Notes. A sync pulls those edits first, then pushes
 every row back, so the sheet always ends up looking like the tracker. A row a
 person adds by hand (no ID) becomes a tracked job.
 
-Two ways in: a service account (developer path: works with any sheet shared
-with it) or the person's own Google account via OAuth on the loopback address,
-limited to files Presence created — the narrow drive.file scope."""
+Two ways in: the person's own Google account via OAuth on the loopback address,
+limited to files Presence created — the narrow drive.file scope — using the
+client a release build ships with (or one the person uploads on a source
+build); or a service account (developer path: works with any sheet shared
+with it).
+
+Every Google project shares one quota pool across all installs, so a sync is a
+fixed three calls (one read, one clear, one write) and the client backs off
+with jitter when Google asks it to slow down."""
 
 from __future__ import annotations
 
 import json
 import os
+import random
 import re
 import threading
+import time
 from datetime import date, datetime
 from pathlib import Path
 from typing import Any, Protocol
@@ -24,6 +32,7 @@ from urllib.parse import quote
 import requests
 from pydantic import BaseModel, Field
 
+from presence.adapters.google_client import builtin_client_config, has_builtin_client
 from presence.tracker.conventions import (
     EVENT_STATUS,
     ConventionError,
@@ -53,8 +62,15 @@ HEADER = [
 SA_FILE = "google_service_account.json"
 OAUTH_CLIENT = "google_oauth_client.json"
 OAUTH_TOKEN = "google_oauth_token.json"
+RECONNECT_FLAG = "google_reconnect"  # present = Google rejected the stored token
 STATE_FILE = "sheet_sync.json"
+RECONNECT_MSG = "Google needs you to reconnect"
+SUCCESS_PAGE = (
+    "Presence is connected to Google. You can close this tab and go back to Presence."
+)
+MAX_TRIES = 5
 _ID_RE = re.compile(r"/spreadsheets/d/([A-Za-z0-9_-]+)")
+_RATE_WORDS = ("rateLimitExceeded", "userRateLimitExceeded", "quotaExceeded")
 
 
 class SheetError(Exception):
@@ -109,21 +125,37 @@ def save_oauth_client(data: Path, raw: bytes) -> None:
 
 
 def connection(data: Path) -> dict[str, Any]:
+    """What the data folder holds: kind ('' / 'oauth' / 'service_account'),
+    whether this build ships a Google client, whether the person uploaded one,
+    and whether Google has asked for a fresh sign-in."""
+    base = {
+        "kind": "",
+        "email": "",
+        "builtin": has_builtin_client(),
+        "has_client": (data / OAUTH_CLIENT).exists(),
+        "needs_reconnect": False,
+    }
     if (data / SA_FILE).exists():
         email = json.loads((data / SA_FILE).read_text()).get("client_email", "")
-        return {
-            "kind": "service_account",
-            "email": email,
-            "has_client": (data / OAUTH_CLIENT).exists(),
-        }
+        return {**base, "kind": "service_account", "email": email}
     if (data / OAUTH_TOKEN).exists():
-        return {"kind": "oauth", "email": "", "has_client": True}
-    return {"kind": "", "email": "", "has_client": (data / OAUTH_CLIENT).exists()}
+        return {
+            **base,
+            "kind": "oauth",
+            "has_client": True,
+            "needs_reconnect": (data / RECONNECT_FLAG).exists(),
+        }
+    return base
 
 
 def disconnect(data: Path) -> None:
-    for name in (SA_FILE, OAUTH_TOKEN):
+    for name in (SA_FILE, OAUTH_TOKEN, RECONNECT_FLAG):
         (data / name).unlink(missing_ok=True)
+
+
+def mark_reconnect(data: Path | None) -> None:
+    if data is not None:
+        (data / RECONNECT_FLAG).write_text("")
 
 
 def credentials(data: Path) -> Any:
@@ -142,33 +174,64 @@ def credentials(data: Path) -> Any:
 
 
 _oauth: dict[str, Any] = {"running": False, "done": False, "error": None}
+_oauth_thread: threading.Thread | None = None
+oauth_finish_lock = threading.Lock()  # the app creates the sheet once after sign-in
+
+
+def client_config(data: Path) -> dict[str, Any]:
+    """The built-in client wins; a source build falls back to the uploaded file."""
+    cfg = builtin_client_config()
+    if cfg is not None:
+        return cfg
+    client = data / OAUTH_CLIENT
+    if not client.exists():
+        raise SheetError(
+            "Google sign-in isn't included in this build — add your own client file "
+            "under Advanced first"
+        )
+    try:
+        return json.loads(client.read_text())
+    except ValueError as exc:
+        raise SheetError("the saved client file is not JSON") from exc
+
+
+def _flow_class() -> Any:
+    from google_auth_oauthlib.flow import InstalledAppFlow
+
+    return InstalledAppFlow
 
 
 def start_oauth(data: Path) -> dict[str, Any]:
-    """Google sign-in in the person's browser; the reply lands on 127.0.0.1."""
-    client = data / OAUTH_CLIENT
-    if not client.exists():
-        raise SheetError("add an OAuth client file first")
+    """Google sign-in in the person's browser; the reply lands on 127.0.0.1.
+
+    Scope is drive.file only: Presence can see the sheet it creates and nothing
+    else in the person's Drive. Runs on a thread; poll oauth_status()."""
+    global _oauth_thread
+    cfg = client_config(data)
     if _oauth["running"]:
         return _oauth
     _oauth.update({"running": True, "done": False, "error": None})
 
     def worker() -> None:
         try:
-            from google_auth_oauthlib.flow import InstalledAppFlow
-
-            flow = InstalledAppFlow.from_client_secrets_file(str(client), scopes=[SCOPE_FILES])
+            flow = _flow_class().from_client_config(cfg, scopes=[SCOPE_FILES])
             creds = flow.run_local_server(
-                host="127.0.0.1", port=0, open_browser=True, timeout_seconds=300
+                host="127.0.0.1",
+                port=0,
+                open_browser=True,
+                timeout_seconds=300,
+                success_message=SUCCESS_PAGE,
             )
             _write_private(data / OAUTH_TOKEN, creds.to_json())
+            (data / RECONNECT_FLAG).unlink(missing_ok=True)
             _oauth["done"] = True
         except Exception as exc:
             _oauth["error"] = f"{type(exc).__name__}: {str(exc)[:160]}"
         finally:
             _oauth["running"] = False
 
-    threading.Thread(target=worker, daemon=True).start()
+    _oauth_thread = threading.Thread(target=worker, daemon=True)
+    _oauth_thread.start()
     return _oauth
 
 
@@ -188,29 +251,62 @@ class Client(Protocol):
     def clear(self, sheet_id: str, rng: str) -> None: ...
 
 
-class SheetClient:
-    """Sheets + Drive over plain HTTP; one bearer token from google-auth."""
+def _sleep(seconds: float) -> None:  # swapped out by tests
+    time.sleep(seconds)
 
-    def __init__(self, creds: Any):
+
+def _is_rate_limited(status: int, text: str) -> bool:
+    return status == 429 or (status == 403 and any(w in text for w in _RATE_WORDS))
+
+
+class SheetClient:
+    """Sheets + Drive over plain HTTP; one bearer token from google-auth.
+
+    Retries when Google asks it to slow down (429, or 403 rate-limit reasons)
+    with exponential backoff and jitter, at most MAX_TRIES attempts. A token
+    Google no longer accepts (invalid_grant, or a 401) becomes a plain
+    "reconnect" error and, when the data folder is known, a flag the setup
+    page turns into a Reconnect Google button."""
+
+    def __init__(self, creds: Any, data: Path | None = None):
         self.creds = creds
+        self.data = data
 
     def _headers(self) -> dict[str, str]:
         from google.auth.transport.requests import Request
 
         if not self.creds.valid:
-            self.creds.refresh(Request())
+            try:
+                self.creds.refresh(Request())
+            except Exception as exc:
+                if "invalid_grant" in str(exc):
+                    mark_reconnect(self.data)
+                    raise SheetError(RECONNECT_MSG) from exc
+                raise SheetError(f"Google: {type(exc).__name__}: {str(exc)[:120]}") from exc
         return {"Authorization": f"Bearer {self.creds.token}"}
 
     def _req(self, method: str, url: str, **kw: Any) -> dict[str, Any]:
-        try:
-            r = requests.request(method, url, headers=self._headers(), timeout=30, **kw)
-        except Exception as exc:
-            raise SheetError(f"Google: {type(exc).__name__}: {str(exc)[:120]}") from exc
+        for attempt in range(MAX_TRIES):
+            try:
+                r = requests.request(method, url, headers=self._headers(), timeout=30, **kw)
+            except SheetError:
+                raise
+            except Exception as exc:
+                raise SheetError(f"Google: {type(exc).__name__}: {str(exc)[:120]}") from exc
+            if _is_rate_limited(r.status_code, r.text) and attempt < MAX_TRIES - 1:
+                _sleep(min(2**attempt, 16) + random.uniform(0, 1))
+                continue
+            break
+        if r.status_code == 401:
+            mark_reconnect(self.data)
+            raise SheetError(RECONNECT_MSG)
         if r.status_code >= 400:
             try:
                 msg = r.json()["error"]["message"]
             except Exception:
                 msg = r.text[:200]
+            if _is_rate_limited(r.status_code, r.text):
+                msg = "Google is busy — try again in a minute"
             raise SheetError(f"Google API {r.status_code}: {msg}")
         return r.json() if r.text.strip() else {}
 

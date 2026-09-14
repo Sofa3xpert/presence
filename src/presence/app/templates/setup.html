@@ -113,43 +113,59 @@
 </section>
 
 <section class="step {{ 'done' if state.tracker.backend == 'sqlite' or state.tracker.sheet_id else 'todo' }}"><h2>3 · Tracker</h2>
-<p class="hint">Your applications live in SQLite on this machine and show on the Tracker page. Prefer a spreadsheet? Presence can mirror the tracker to a Google Sheet: it fills Company, Role, Timeline and Link; you edit <strong>Status</strong>, <strong>Next action</strong> and <strong>Notes</strong> there, and each sync brings your edits back. A row you add by hand becomes a tracked job.</p>
+<p class="hint">Presence keeps your applications on this computer and shows them on the Tracker page. If you would rather work in a spreadsheet, it can also keep a Google Sheet in step with the tracker: it fills in Company, Role, Timeline and Link; you change <strong>Status</strong>, <strong>Next action</strong> and <strong>Notes</strong> in the sheet, and every sync brings your changes back. A row you add by hand becomes a tracked job.</p>
 <form method="post" action="{{ url_for('setup_tracker') }}" class="row" style="align-items:flex-end;gap:12px">
-  <label>Where you edit<select name="backend"><option value="sqlite" {{ 'selected' if state.tracker.backend == 'sqlite' }}>Here, in the app (SQLite)</option><option value="sheet" {{ 'selected' if state.tracker.backend == 'sheet' }}>Google Sheet mirror</option></select></label>
+  <label>Where your tracker lives<select name="backend"><option value="sqlite" {{ 'selected' if state.tracker.backend == 'sqlite' }}>Kept on this computer</option><option value="sheet" {{ 'selected' if state.tracker.backend == 'sheet' }}>Also in a Google Sheet</option></select></label>
   <button>Save</button>
 </form>
 {% if state.tracker.backend == 'sheet' %}
-<h3>Connect Google</h3>
-{% if state.google.kind %}
-<p><span class="pill on">{{ 'signed in with Google' if state.google.kind == 'oauth' else 'service account · ' ~ state.google.email }}</span>
-<form method="post" action="{{ url_for('google_disconnect') }}" style="display:inline"><button class="quiet">Disconnect</button></form></p>
+<h3>Google</h3>
+{% if state.google.kind == 'oauth' %}
+{% if state.google.needs_reconnect %}
+<p><span class="pill off">Google needs you to reconnect</span> <span class="hint" style="margin:0">Your sign-in has expired or was withdrawn. Nothing is lost — sign in again and syncing carries on.</span></p>
+<form method="post" action="{{ url_for('google_oauth_start') }}" style="display:inline"><button>Reconnect Google</button>{% if state.oauth_running %} <span class="pill off" id="oauth-pill">signing in…</span>{% endif %}</form>
 {% else %}
-<details open><summary><strong>Sign in with your Google account</strong> (the sheet lives in your Drive; Presence can only touch files it creates)</summary>
-<p class="hint">Until Presence ships its own registered Google app, sign-in needs an OAuth client file of your own: Google Cloud console → APIs &amp; Services → Credentials → Create OAuth client ID → <em>Desktop app</em> → download JSON. Enable the Google Sheets API and Google Drive API on that project.</p>
+<p><span class="pill on">signed in with Google</span>
+<form method="post" action="{{ url_for('google_disconnect') }}" style="display:inline"><button class="quiet">Disconnect</button></form></p>
+{% endif %}
+{% elif state.google.kind == 'service_account' %}
+<p><span class="pill on">service account · {{ state.google.email }}</span>
+<form method="post" action="{{ url_for('google_disconnect') }}" style="display:inline"><button class="quiet">Disconnect</button></form></p>
+{% elif state.google.builtin %}
+<p class="hint">Presence can only see the sheet it creates for you — nothing else in your Google Drive.</p>
+<form method="post" action="{{ url_for('google_oauth_start') }}"><button>Connect Google</button>{% if state.oauth_running %} <span class="pill off" id="oauth-pill">signing in…</span>{% endif %}</form>
+{% else %}
+<p class="hint">Google sign-in isn't included in this build.</p>
+<details><summary>Advanced</summary>
+<p class="hint">Two ways in for people who build Presence themselves. Either needs a Google Cloud project with the Google Sheets API and Google Drive API switched on.</p>
+<p><strong>Your own Google client.</strong> In the Google Cloud console create an OAuth client of type <em>Desktop app</em> and download its JSON file. Sign-in then works the same way as in the packaged app: Presence can only see the sheet it creates.</p>
 {% if not state.google.has_client %}
-<form method="post" action="{{ url_for('google_oauth_client') }}" enctype="multipart/form-data" class="row" style="align-items:flex-end;gap:12px"><label>OAuth client file<input type="file" name="client" accept="application/json"></label><button class="quiet">Add client</button></form>
+<form method="post" action="{{ url_for('google_oauth_client') }}" enctype="multipart/form-data" class="row" style="align-items:flex-end;gap:12px"><label>Client file<input type="file" name="client" accept="application/json"></label><button class="quiet">Add client</button></form>
 {% else %}
 <form method="post" action="{{ url_for('google_oauth_start') }}"><button>Connect Google</button> <span class="pill off" id="oauth-pill">{{ 'signing in…' if state.oauth_running else 'client file ready' }}</span></form>
 {% endif %}
-</details>
-<details><summary><strong>Use a service account</strong> (developers: no sign-in page, works with any sheet you share with it)</summary>
-<p class="hint">Google Cloud console → IAM &amp; Admin → Service accounts → create one → Keys → Add key → JSON. Enable the Sheets and Drive APIs. Then upload the key here; share sheets with the account's email.</p>
+<p><strong>A service account.</strong> No sign-in page; it works with any sheet you share with its email address. Console → IAM &amp; Admin → Service accounts → create one → Keys → Add key → JSON, then upload that key here.</p>
 <form method="post" action="{{ url_for('google_service_account') }}" enctype="multipart/form-data" class="row" style="align-items:flex-end;gap:12px"><label>Service-account key<input type="file" name="key" accept="application/json"></label><button class="quiet">Add key</button></form>
 </details>
 {% endif %}
 <h3>Your sheet</h3>
 {% if state.tracker.sheet_id %}
-<p><a href="{{ state.tracker.sheet_url }}" target="_blank" rel="noopener">open the sheet</a> <span class="mono">{{ state.tracker.tab }}</span>
-{% if state.sheet_last.at %}<span class="hint" style="margin:0"> · last sync {{ state.sheet_last.at|replace('T', ' ') }}: {{ state.sheet_last.pulled }} pulled, {{ state.sheet_last.pushed }} pushed{{ (', ' ~ state.sheet_last.issues|length ~ ' issue(s)') if state.sheet_last.issues else '' }}</span>{% endif %}</p>
+<p><a href="{{ state.tracker.sheet_url }}" target="_blank" rel="noopener">Open your sheet</a>
+{% if state.sheet_last.at %}<span class="hint" style="margin:0"> · last sync {{ state.sheet_last.at|replace('T', ' ') }}: {{ state.sheet_last.pulled }} pulled, {{ state.sheet_last.pushed }} pushed{{ (', ' ~ state.sheet_last.issues|length ~ ' issue(s)') if state.sheet_last.issues else '' }}</span>{% else %}<span class="hint" style="margin:0"> · not synced yet</span>{% endif %}</p>
 <form method="post" action="{{ url_for('sheet_sync') }}" style="display:inline"><button>Sync now</button></form>
 <p class="hint">Sync also runs at the end of every cycle.</p>
 {% elif not state.google.kind %}
-<p class="hint">Connect Google above, then create a sheet here or connect an empty one.</p>
+<p class="hint">Sign in above first{{ "; your tracker sheet is made for you right after" if state.google.builtin }}.</p>
+{% elif state.google.kind == 'oauth' %}
+<form method="post" action="{{ url_for('sheet_create') }}">
+  <label>Sheet name<input type="text" name="title" value="Presence tracker"></label>
+  <button>Create my tracker sheet</button>
+</form>
 {% else %}
 <div class="row" style="gap:24px;align-items:flex-start">
 <form method="post" action="{{ url_for('sheet_create') }}">
   <label>Create a new sheet<input type="text" name="title" value="Presence tracker"></label>
-  {% if state.google.kind == 'service_account' %}<label>Share it with (your Google email)<input type="email" name="share_with" value="{{ state.tracker.share_with }}" placeholder="you@gmail.com"></label>{% endif %}
+  <label>Share it with (your Google email)<input type="email" name="share_with" value="{{ state.tracker.share_with }}" placeholder="you@gmail.com"></label>
   <button>Create sheet</button>
 </form>
 <form method="post" action="{{ url_for('sheet_connect') }}">
@@ -159,16 +175,27 @@
 </div>
 {% endif %}
 <details><summary>Bring an existing tracker in</summary>
-<p class="hint">Rows from another spreadsheet (any columns: Company, Role, Link, Status, Applied, Location, Channel, Next action…) are added to the tracker once; duplicates are skipped and other columns are kept as extra fields. A service account must be able to read that sheet. CSV files import from the Tracker page.</p>
-<form method="post" action="{{ url_for('sheet_import') }}" class="row" style="align-items:flex-end;gap:12px"><label>Sheet to import<input type="text" name="sheet" placeholder="sheet link or ID"></label><button class="quiet">Import rows</button></form>
+<p class="hint">Rows from another spreadsheet (any columns: Company, Role, Link, Status, Applied, Location, Channel, Next action…) are added to the tracker once; duplicates are skipped and other columns are kept as extra fields.</p>
+{% if state.google.kind == 'service_account' %}
+<form method="post" action="{{ url_for('sheet_import') }}" class="row" style="align-items:flex-end;gap:12px"><label>Sheet to import (shared with the service account)<input type="text" name="sheet" placeholder="sheet link or ID"></label><button class="quiet">Import rows</button></form>
+{% else %}
+<p class="hint">In Google Sheets choose File → Download → Comma Separated Values, then pick that file here.</p>
+{% endif %}
+<form method="post" action="{{ url_for('tracker_import') }}" enctype="multipart/form-data" class="row" style="align-items:flex-end;gap:12px"><label>CSV file<input type="file" name="csv" accept=".csv,text/csv"></label><button class="quiet">Import rows</button></form>
 </details>
 {% if state.oauth_running %}
 <script>
 (function () {
+  const pill = document.getElementById('oauth-pill');
   const t = setInterval(() => {
     fetch('{{ url_for('google_oauth_status') }}').then(r => r.json()).then(s => {
-      if (s.connected) { clearInterval(t); location.reload(); }
-      else if (s.error) { clearInterval(t); document.getElementById('oauth-pill').textContent = s.error; }
+      if (s.error) { clearInterval(t); if (pill) pill.textContent = 'sign-in did not finish — try again'; }
+      else if (s.connected && !s.running) {
+        clearInterval(t);
+        if (s.sheet_id) { location.reload(); return; }
+        if (pill) pill.textContent = 'making your sheet…';
+        fetch('{{ url_for('google_oauth_finish') }}', {method: 'POST'}).finally(() => location.reload());
+      }
     }).catch(() => {});
   }, 3000);
 })();

@@ -46,7 +46,7 @@ def _csv(value: str) -> list[str]:
 
 def sheet_client_for(data: Path) -> Any:
     creds = gsheet.credentials(data)
-    return gsheet.SheetClient(creds) if creds is not None else None
+    return gsheet.SheetClient(creds, data) if creds is not None else None
 
 
 def _bot(data: Path) -> dict[str, Any]:
@@ -320,14 +320,55 @@ def create_app(data: Path) -> Flask:
     def google_oauth_start():
         try:
             gsheet.start_oauth(data)
-            flash("a Google sign-in opened in your browser — finish it there")
+            flash("Google opened in your browser — choose your account there")
         except gsheet.SheetError as exc:
             flash(str(exc), "error")
         return redirect(url_for("setup"))
 
     @app.get("/google/oauth/status")
     def google_oauth_status():
-        return jsonify(gsheet.oauth_status(data))
+        tr = read_yaml(data / "presence.yaml").get("tracker") or {}
+        return jsonify({**gsheet.oauth_status(data), "sheet_id": tr.get("sheet_id", "")})
+
+    def _create_sheet(client: Any, title: str, share_with: str = "") -> tuple[str, str]:
+        """One create call (plus a share for service accounts); saves the tracker."""
+        sid, url = client.create(title or "Presence tracker", "Tracker")
+        if share_with and gsheet.connection(data)["kind"] == "service_account":
+            client.share(sid, share_with)
+        _save_tracker(backend="sheet", sheet_id=sid, sheet_url=url, tab="Tracker",
+                      share_with=share_with)
+        return sid, url
+
+    def _sync_once(client: Any, tr: dict[str, Any]) -> gsheet.SyncResult:
+        tracker = Tracker(data / "tracker.db")
+        try:
+            return gsheet.sync(tracker, client, tr["sheet_id"], tr.get("tab") or "Tracker",
+                               data / gsheet.STATE_FILE)
+        finally:
+            tracker.close()
+
+    @app.post("/google/oauth/finish")
+    def google_oauth_finish():
+        """Right after sign-in: make the person's sheet and fill it, once."""
+        with gsheet.oauth_finish_lock:
+            tr = read_yaml(data / "presence.yaml").get("tracker") or {}
+            if tr.get("sheet_id"):
+                return jsonify({"created": False, "sheet_url": tr.get("sheet_url", "")})
+            client = sheet_client_for(data)
+            if client is None:
+                return jsonify({"error": "not connected"}), 409
+            try:
+                sid, url = _create_sheet(client, "Presence tracker")
+            except gsheet.SheetError as exc:
+                flash(str(exc), "error")
+                return jsonify({"error": str(exc)}), 502
+            try:
+                _sync_once(client, {"sheet_id": sid, "tab": "Tracker"})
+            except gsheet.SheetError as exc:
+                flash(f"your sheet is ready but the first fill failed: {exc}", "error")
+            else:
+                flash("Google connected — your tracker sheet is ready")
+            return jsonify({"created": True, "sheet_url": url})
 
     @app.post("/google/disconnect")
     def google_disconnect():
@@ -340,17 +381,12 @@ def create_app(data: Path) -> Flask:
         client = _client_or_flash()
         if client is None:
             return redirect(url_for("setup"))
-        share_with = request.form.get("share_with", "").strip()
         try:
-            sid, url = client.create(request.form.get("title", "").strip() or "Presence tracker",
-                                     "Tracker")
-            if share_with and gsheet.connection(data)["kind"] == "service_account":
-                client.share(sid, share_with)
+            _create_sheet(client, request.form.get("title", "").strip(),
+                          request.form.get("share_with", "").strip())
         except gsheet.SheetError as exc:
             flash(str(exc), "error")
             return redirect(url_for("setup"))
-        _save_tracker(backend="sheet", sheet_id=sid, sheet_url=url, tab="Tracker",
-                      share_with=share_with)
         flash("sheet created — press Sync now to fill it")
         return redirect(url_for("setup"))
 
@@ -379,15 +415,11 @@ def create_app(data: Path) -> Flask:
             if not tr.get("sheet_id"):
                 flash("create or connect a sheet first", "error")
             return redirect(url_for("setup"))
-        tracker = Tracker(data / "tracker.db")
         try:
-            res = gsheet.sync(tracker, client, tr["sheet_id"], tr.get("tab") or "Tracker",
-                              data / gsheet.STATE_FILE)
+            res = _sync_once(client, tr)
         except gsheet.SheetError as exc:
             flash(str(exc), "error")
             return redirect(url_for("setup"))
-        finally:
-            tracker.close()
         flash("synced: " + res.summary())
         for issue in res.issues[:5]:
             flash(issue, "error")
