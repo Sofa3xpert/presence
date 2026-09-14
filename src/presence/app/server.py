@@ -42,6 +42,7 @@ from presence.tracker import STATUSES, Tracker
 from presence.tracker.conventions import ConventionError
 from presence.tracker.importer import import_rows
 
+LOCAL_HOSTS = frozenset({"127.0.0.1", "localhost", "::1"})
 DEFAULT_MODELS = {
     "local": "qwen3.5:9b",
     "anthropic": "claude-haiku-4-5-20251001",
@@ -220,6 +221,25 @@ def create_app(data: Path) -> Flask:
     @app.context_processor
     def _ctx() -> dict[str, Any]:
         return {"data_dir": str(data)}
+
+    @app.before_request
+    def only_this_computer():
+        """A page on localhost is still reachable from any site open in the same
+        browser. Refuse requests that name another host (DNS rebinding) and
+        state-changing requests that a foreign page started (cross-site POST)."""
+        host = (request.host or "").split(":")[0].strip("[]").lower()
+        if host not in LOCAL_HOSTS:
+            return "Presence only answers on this computer.", 403
+        if request.method in ("POST", "PUT", "DELETE", "PATCH"):
+            site = request.headers.get("Sec-Fetch-Site")
+            if site and site not in ("same-origin", "none"):
+                return "That request came from another website and was refused.", 403
+            origin = request.headers.get("Origin")
+            if origin:
+                origin_host = origin.split("://", 1)[-1].split(":")[0].strip("[]").lower()
+                if origin_host not in LOCAL_HOSTS:
+                    return "That request came from another website and was refused.", 403
+        return None
 
     @app.get("/health")
     def health():

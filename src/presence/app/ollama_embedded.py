@@ -115,7 +115,7 @@ def api_version(port: int, timeout: float = 2) -> str | None:
 def pid_alive(pid: int) -> bool:
     if pid <= 0:
         return False
-    if platform.system() == "Windows":
+    if os.name == "nt":  # the real OS decides how to ask, whatever platform.system() says
         return _cmdline(pid) != ""
     try:
         os.kill(pid, 0)
@@ -130,14 +130,20 @@ def pid_alive(pid: int) -> bool:
 
 
 def _cmdline(pid: int) -> str:
+    """The full command line of a process, or '' when it is gone."""
     try:
-        if platform.system() == "Windows":
+        if os.name == "nt":
             out = subprocess.check_output(
                 ["tasklist", "/FI", f"PID eq {pid}", "/FO", "CSV", "/NH"], text=True, timeout=5
             )
             return out if str(pid) in out else ""
+        proc = Path(f"/proc/{pid}/cmdline")  # Linux: exact, no width limit
+        if proc.exists():
+            return proc.read_bytes().replace(b"\0", b" ").decode(errors="replace").strip()
+        # -ww: unlimited width. Without it ps cuts at 80 columns when not on a terminal,
+        # and a long install path made Presence disown its own engine.
         return subprocess.check_output(
-            ["ps", "-o", "command=", "-p", str(pid)], text=True, timeout=5
+            ["ps", "-ww", "-o", "command=", "-p", str(pid)], text=True, timeout=5
         ).strip()
     except Exception:
         return ""
@@ -200,7 +206,7 @@ class Engine:
     def set_current(self, version: str) -> None:
         link = self.versions / "current"
         pointer = self.versions / "current.json"
-        if platform.system() == "Windows":
+        if os.name == "nt":  # no symlinks without privileges on Windows
             pointer.write_text(json.dumps({"version": version}))
             return
         tmp = self.versions / "current.tmp"
@@ -380,7 +386,7 @@ class Engine:
     def owns(self, pid: int) -> bool:
         """Is this pid running *our* engine binary (not the person's own Ollama)?"""
         cmd = _cmdline(pid)
-        if platform.system() == "Windows":
+        if os.name == "nt":
             return "ollama.exe" in cmd.lower()
         return str(self.versions) in cmd
 
@@ -428,7 +434,7 @@ class Engine:
                 "OLLAMA_KEEP_ALIVE": "10m",
             }
             kwargs: dict[str, Any] = {}
-            if platform.system() == "Windows":
+            if os.name == "nt":
                 kwargs["creationflags"] = getattr(subprocess, "CREATE_NO_WINDOW", 0) | getattr(
                     subprocess, "CREATE_NEW_PROCESS_GROUP", 0
                 )
@@ -579,7 +585,7 @@ class Engine:
 
 
 def _terminate(pid: int, wait: float = 10) -> None:
-    if platform.system() == "Windows":
+    if os.name == "nt":
         subprocess.run(["taskkill", "/PID", str(pid), "/T", "/F"], capture_output=True)
         return
     try:

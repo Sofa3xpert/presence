@@ -9,6 +9,7 @@ import tarfile
 import time
 
 import pytest
+from conftest import needs_loopback
 
 from presence.app import ollama, ollama_embedded, server
 from presence.app.ollama_embedded import Engine
@@ -222,6 +223,8 @@ def test_upgrade_swaps_pointer_and_keeps_one_previous(tmp_path, release, monkeyp
     assert eng.installed_versions() == ["0.33.0", "0.34.0"]
 
 
+@needs_loopback
+@pytest.mark.skipif(os.name == "nt", reason="the stand-in engine is a shell script")
 def test_launch_and_stop_a_real_child(tmp_path, darwin, monkeypatch):
     """A tiny stand-in 'engine' (python http server) proves the child lifecycle:
     pidfile + portfile written, health poll, adopted after a restart, stopped."""

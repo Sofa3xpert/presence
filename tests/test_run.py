@@ -8,6 +8,7 @@ import time
 from datetime import datetime
 
 import requests
+from conftest import needs_loopback
 
 from presence.app import run
 from presence.app.config_io import write_yaml
@@ -101,6 +102,7 @@ def test_pick_port_skips_busy_ports():
     assert run.port_free(run.pick_port(None))
 
 
+@needs_loopback
 def test_serve_answers_health_opens_browser_once_and_reuses_instance(tmp_path, monkeypatch):
     _seed(tmp_path, confirmed=False)
     opened = []

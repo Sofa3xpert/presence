@@ -6,6 +6,7 @@ paths and logging.
 
 import importlib.util
 import io
+import os
 import socket
 import sys
 import urllib.error
@@ -68,11 +69,12 @@ def test_redirect_stdio_without_console(launcher, tmp_path, monkeypatch):
 
 
 def test_gui_path_prepends_missing_bins(launcher):
-    out = launcher.gui_path("/usr/bin:/bin")
-    assert out.split(":") == ["/opt/homebrew/bin", "/usr/local/bin", "/usr/bin", "/bin"]
+    sep = os.pathsep
+    out = launcher.gui_path(sep.join(["/usr/bin", "/bin"]))
+    assert out.split(sep) == ["/opt/homebrew/bin", "/usr/local/bin", "/usr/bin", "/bin"]
     again = launcher.gui_path(out)
     assert again == out
-    assert launcher.gui_path(None).split(":") == ["/opt/homebrew/bin", "/usr/local/bin"]
+    assert launcher.gui_path(None).split(sep) == ["/opt/homebrew/bin", "/usr/local/bin"]
 
 
 def test_pick_port_prefers_free_port(launcher):

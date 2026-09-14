@@ -30,7 +30,7 @@ def test_first_sync_pushes_everything(tmp_path):
     assert r.pushed == 2 and r.pulled == [] and c.rows[0] == gsheet.HEADER
     assert c.rows[1][:3] == ["2", "Beta", "Data Analyst"]  # newest first
     assert json.loads(state.read_text())["snapshot"]["1"]["Status"] == "to apply"
-    assert oct(os.stat(state).st_mode)[-3:] == "600"
+    assert os.name == "nt" or oct(os.stat(state).st_mode)[-3:] == "600"
 
 
 def test_person_edits_come_back_as_events(tmp_path):
@@ -96,7 +96,7 @@ def test_credential_files(tmp_path):
         gsheet.save_service_account(tmp_path, b"{}")
     key = {"type": "service_account", "client_email": "p@x.iam.gserviceaccount.com"}
     assert gsheet.save_service_account(tmp_path, json.dumps(key).encode()).startswith("p@")
-    assert oct(os.stat(tmp_path / gsheet.SA_FILE).st_mode)[-3:] == "600"
+    assert os.name == "nt" or oct(os.stat(tmp_path / gsheet.SA_FILE).st_mode)[-3:] == "600"
     assert gsheet.connection(tmp_path)["kind"] == "service_account"
     gsheet.disconnect(tmp_path)
     assert gsheet.connection(tmp_path)["kind"] == ""
@@ -166,7 +166,7 @@ def test_builtin_client_signs_in_with_drive_file_only(tmp_path, monkeypatch, bui
     assert call["scopes"] == [gsheet.SCOPE_FILES]
     assert call["host"] == "127.0.0.1" and call["port"] == 0 and call["open_browser"] is True
     assert call["timeout_seconds"] == 300 and "close this tab" in call["success_message"]
-    assert oct(os.stat(tmp_path / gsheet.OAUTH_TOKEN).st_mode)[-3:] == "600"
+    assert os.name == "nt" or oct(os.stat(tmp_path / gsheet.OAUTH_TOKEN).st_mode)[-3:] == "600"
     assert not (tmp_path / gsheet.RECONNECT_FLAG).exists()  # a fresh sign-in clears it
     st = gsheet.oauth_status(tmp_path)
     assert st["connected"] and st["done"] and not st["running"] and st["error"] is None
