@@ -34,3 +34,12 @@ th { font-family: "IBM Plex Mono", Menlo, monospace; font-size: 11px; letter-spa
 pre.brief { background: var(--paper); border: 1px solid #d9ddd4; padding: 14px 16px; white-space: pre-wrap; font: inherit; }
 .row { display: flex; gap: 14px; flex-wrap: wrap; }
 .tag { font-family: "IBM Plex Mono", Menlo, monospace; font-size: 11px; color: var(--muted); }
+
+ol.steps { padding-left: 20px; max-width: 560px; }
+ol.steps li { margin: 4px 0; }
+figure.qr { margin: 0; text-align: center; }
+figure.qr img { display: block; border: 1px solid var(--stone); background: #fff; }
+figure.qr figcaption { font-size: 12px; color: var(--muted); margin-top: 4px; }
+details summary { cursor: pointer; margin-bottom: 8px; }
+h3 { font-size: 15px; margin: 14px 0 6px; }
+figure.qr + div { flex: 1 1 320px; }

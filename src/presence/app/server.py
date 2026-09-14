@@ -11,8 +11,15 @@ from typing import Any
 
 from flask import Flask, flash, jsonify, redirect, render_template, request, url_for
 
-from presence.adapters import TelegramError, TelegramMessenger, pair
-from presence.app import ollama
+from presence.adapters import (
+    TelegramError,
+    TelegramMessenger,
+    get_me,
+    pair,
+    pair_once,
+    pairing_link,
+)
+from presence.app import ollama, qr
 from presence.app.boards_ui import detect
 from presence.app.config_io import read_secrets, read_yaml, write_secret, write_yaml
 from presence.app.cvparse import extract_text, guess_fields
@@ -33,6 +40,11 @@ def _csv(value: str) -> list[str]:
     return [v.strip() for v in (value or "").split(",") if v.strip()]
 
 
+def _bot(data: Path) -> dict[str, Any]:
+    f = data / "telegram_bot.json"
+    return json.loads(f.read_text()) if f.exists() else {}
+
+
 def _state(data: Path) -> dict[str, Any]:
     app_cfg, profile, search = (
         read_yaml(data / "presence.yaml"),
@@ -41,6 +53,9 @@ def _state(data: Path) -> dict[str, Any]:
     )
     sources = read_yaml(data / "sources.yaml").get("sources", [])
     sec = read_secrets(data)
+    bot = _bot(data)
+    pair_link = (pairing_link(bot["username"], bot["pair_code"])
+                 if bot.get("username") and bot.get("pair_code") else "")
     draft = read_yaml(data / "cv_draft.json") if (data / "cv_draft.json").exists() else {}
     providers = app_cfg.get("providers", {})
     scout = (app_cfg.get("agents") or {}).get("scout", {})
@@ -64,6 +79,10 @@ def _state(data: Path) -> dict[str, Any]:
         "model_done": bool(scout.get("model")),
         "telegram_token": bool(sec.get("TELEGRAM_BOT_TOKEN")),
         "telegram_paired": bool(sec.get("TELEGRAM_BOT_TOKEN") and sec.get("TELEGRAM_CHAT_ID")),
+        "bot": bot,
+        "pair_link": pair_link,
+        "pair_qr": qr.data_uri(pair_link) if pair_link else "",
+        "botfather_qr": qr.data_uri("https://t.me/BotFather"),
         "chat_id": sec.get("TELEGRAM_CHAT_ID", ""),
         "tracker": {
             "backend": (app_cfg.get("tracker") or {}).get("backend", "sqlite"),
@@ -190,9 +209,16 @@ def create_app(data: Path) -> Flask:
         if not token:
             flash("paste your bot token first", "error")
             return redirect(url_for("setup"))
-        write_secret(data, "TELEGRAM_BOT_TOKEN", token)
         try:
-            if action == "pair":
+            if action == "save":
+                me = get_me(token)  # the token is proven before anything is stored
+                write_secret(data, "TELEGRAM_BOT_TOKEN", token)
+                bot = {"username": me["username"], "first_name": me["first_name"],
+                       "pair_code": pysecrets.token_urlsafe(9)}
+                (data / "telegram_bot.json").write_text(json.dumps(bot))
+                flash(f"bot @{me['username']} saved — now pair it from your phone")
+            elif action == "pair":
+                write_secret(data, "TELEGRAM_BOT_TOKEN", token)
                 chat_id = pair(token, wait_seconds=20)
                 if not chat_id:
                     flash("no message seen yet — send your bot a message, then click Pair", "error")
@@ -205,11 +231,30 @@ def create_app(data: Path) -> Flask:
                     "Presence is paired with this chat. Nothing is ever sent on your behalf."
                 )
                 flash("test message sent")
-            else:
-                flash("token saved")
         except TelegramError as exc:
             flash(str(exc), "error")
         return redirect(url_for("setup"))
+
+    @app.get("/telegram/pair/status")
+    def telegram_pair_status():
+        sec = read_secrets(data)
+        bot = _bot(data)
+        if sec.get("TELEGRAM_CHAT_ID"):
+            return jsonify({"paired": True, "chat_id": sec["TELEGRAM_CHAT_ID"],
+                            "name": bot.get("paired_name", "")})
+        token = sec.get("TELEGRAM_BOT_TOKEN", "")
+        if not (token and bot.get("pair_code")):
+            return jsonify({"paired": False, "reason": "save the token first"})
+        try:
+            hit = pair_once(token, bot["pair_code"])
+        except TelegramError as exc:
+            return jsonify({"paired": False, "reason": str(exc)})
+        if not hit:
+            return jsonify({"paired": False})
+        write_secret(data, "TELEGRAM_CHAT_ID", str(hit["chat_id"]))
+        bot["paired_name"] = hit["name"]
+        (data / "telegram_bot.json").write_text(json.dumps(bot))
+        return jsonify({"paired": True, "chat_id": hit["chat_id"], "name": hit["name"]})
 
     @app.post("/setup/tracker")
     def setup_tracker():

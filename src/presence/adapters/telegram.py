@@ -1,7 +1,10 @@
 """Telegram delivery via the Bot API — the customer's own bot, their own chat.
 
-Pairing: the customer creates a bot with @BotFather (one token), messages it
-once, and `presence telegram pair` reads that message to learn the chat id.
+Pairing: the customer creates a bot with @BotFather (one token). The app then
+shows a deep link / QR code, https://t.me/<bot>?start=<code>; pressing Start
+sends "/start <code>" and only the chat carrying that code is paired (Telegram's
+documented deep-linking, https://core.telegram.org/bots/features#deep-linking).
+`presence telegram pair` keeps the plain fallback: the latest message wins.
 Nothing is stored beyond the token and chat id in the local secrets file."""
 
 from __future__ import annotations
@@ -68,12 +71,57 @@ def latest_chat_id(updates: list[dict[str, Any]]) -> int | None:
     return None
 
 
-def pair(token: str, wait_seconds: int = 90, poll: float = 3.0) -> int | None:
-    """Wait for the customer to message their bot, then return the chat id."""
+def get_me(token: str) -> dict[str, str]:
+    """The bot's own identity; its username is what the pairing link needs."""
+    me = _call(token, "getMe")
+    return {"username": me.get("username", ""), "first_name": me.get("first_name", "")}
+
+
+def pairing_link(username: str, code: str) -> str:
+    return f"https://t.me/{username}?start={code}"
+
+
+def find_start(updates: list[dict[str, Any]], code: str) -> dict[str, Any] | None:
+    """The private chat that pressed Start on our link: its text is '/start <code>'."""
+    for u in reversed(updates):
+        msg = u.get("message") or {}
+        chat = msg.get("chat") or {}
+        if (msg.get("text") or "").strip() == f"/start {code}" and chat.get("id"):
+            who = msg.get("from") or {}
+            return {"chat_id": int(chat["id"]), "name": who.get("first_name", ""),
+                    "update_id": u.get("update_id", 0)}
+    return None
+
+
+def _ack(token: str, update_id: int) -> None:
+    """Confirm updates up to update_id so the pairing message is not seen twice."""
+    try:
+        _call(token, "getUpdates", offset=update_id + 1, timeout=0)
+    except TelegramError:
+        pass
+
+
+def pair_once(token: str, code: str) -> dict[str, Any] | None:
+    """One look at pending updates for our code; the app polls this."""
+    hit = find_start(_call(token, "getUpdates", timeout=0), code)
+    if hit:
+        _ack(token, hit["update_id"])
+    return hit
+
+
+def pair(token: str, wait_seconds: int = 90, poll: float = 3.0,
+         code: str | None = None) -> int | None:
+    """Wait for the customer to message their bot, then return the chat id.
+    With a code only the chat that used the pairing link counts."""
     deadline = time.time() + wait_seconds
     while time.time() < deadline:
-        chat_id = latest_chat_id(_call(token, "getUpdates", timeout=0))
-        if chat_id:
-            return chat_id
+        if code:
+            hit = pair_once(token, code)
+            if hit:
+                return hit["chat_id"]
+        else:
+            chat_id = latest_chat_id(_call(token, "getUpdates", timeout=0))
+            if chat_id:
+                return chat_id
         time.sleep(poll)
     return None

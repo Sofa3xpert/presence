@@ -65,14 +65,52 @@
 </form></section>
 
 <section class="step {{ 'done' if state.telegram_paired else 'todo' }}"><h2>2 · Telegram</h2>
-<p class="hint">Create a bot with @BotFather, paste its token, then send the bot any message and click Pair.</p>
+<p class="hint">Presence talks to you through a bot that is yours alone. Three parts: create the bot once, pair it with your phone, send a test.</p>
+<details {{ '' if state.telegram_token else 'open' }}>
+<summary><strong>A · Create your bot with @BotFather</strong> (about two minutes, once)</summary>
+<div class="row" style="gap:18px;align-items:flex-start">
+<ol class="steps">
+  <li>Open Telegram and find <a href="https://t.me/BotFather" target="_blank" rel="noopener">@BotFather</a>: on a phone, scan the code on the right, or tap the link on this device.</li>
+  <li>Press <strong>Start</strong>, then send <code>/newbot</code>.</li>
+  <li>Give it a display name, for example <em>Presence</em>.</li>
+  <li>Give it a username ending in <code>bot</code>, for example <code>ada_presence_bot</code>. It must be unused.</li>
+  <li>BotFather replies with a token that looks like <code>123456789:AAH…</code>. Copy it. On a phone, press and hold the token to copy; if Telegram is on this computer (Telegram Desktop or web.telegram.org) copy and paste directly.</li>
+  <li>Paste it below and press <strong>Save token</strong>. Presence checks the token with Telegram before storing it.</li>
+</ol>
+<figure class="qr"><img src="{{ state.botfather_qr }}" alt="QR code opening @BotFather" width="132" height="132"><figcaption>opens @BotFather</figcaption></figure>
+</div>
+<p class="hint">The token stays in <code>secrets.env</code> on this machine, readable only by you. Treat it like a password. If it ever leaks, send <code>/revoke</code> to BotFather and save the new one here.</p>
+</details>
 <form method="post" action="{{ url_for('setup_telegram') }}">
-  <label>Bot token<input type="password" name="token" placeholder="{{ 'saved' if state.telegram_token else '123456:ABC…' }}"></label>
+  <label>Bot token<input type="password" name="token" placeholder="{{ 'saved · @' + state.bot.username if state.bot.username else '123456789:AAH…' }}"></label>
   <button name="action" value="save">Save token</button>
-  <button name="action" value="pair" class="quiet">Pair (waits up to 20 s)</button>
-  <button name="action" value="test" class="quiet">Send a test message</button>
-  {% if state.telegram_paired %}<span class="pill on">paired · chat {{ state.chat_id }}</span>{% endif %}
-</form></section>
+  {% if state.telegram_paired %}<span class="pill on">paired · {{ state.bot.paired_name or ('chat ' ~ state.chat_id) }}</span>
+  <button name="action" value="test" class="quiet">Send a test message</button>{% endif %}
+</form>
+{% if state.telegram_token and not state.telegram_paired %}
+<h3>B · Pair it with your phone</h3>
+<div class="row" style="gap:18px;align-items:flex-start">
+<figure class="qr"><img src="{{ state.pair_qr }}" alt="QR code to pair your bot" width="164" height="164"><figcaption>scan with your phone camera</figcaption></figure>
+<div>
+  <p>Scan the code with your phone's camera, or <a href="{{ state.pair_link }}" target="_blank" rel="noopener">open the pairing link</a> on a device where Telegram is signed in. Telegram opens <strong>@{{ state.bot.username }}</strong>. Press <strong>Start</strong>.</p>
+  <p><span class="pill off" id="pair-pill">waiting for Start…</span> <span class="hint" id="pair-text" style="margin:0">the code in the link tells Presence it is you, so nobody else can pair with this bot by chance.</span></p>
+  <form method="post" action="{{ url_for('setup_telegram') }}" class="hint">No camera and no link? Send the bot any message, then <button name="action" value="pair" class="quiet">Pair with the latest message</button></form>
+</div>
+</div>
+<script>
+(function () {
+  const pill = document.getElementById('pair-pill'), text = document.getElementById('pair-text');
+  const t = setInterval(() => {
+    fetch('{{ url_for('telegram_pair_status') }}').then(r => r.json()).then(s => {
+      if (s.paired) { clearInterval(t); pill.textContent = 'paired with ' + (s.name || ('chat ' + s.chat_id)); pill.className = 'pill on';
+        text.textContent = 'done — reloading…'; setTimeout(() => location.reload(), 900); }
+      else if (s.reason) { text.textContent = s.reason; }
+    }).catch(() => {});
+  }, 3000);
+})();
+</script>
+{% endif %}
+</section>
 
 <section class="step done"><h2>3 · Tracker</h2>
 <p class="hint">SQLite on this machine is the default and is shown on the Tracker page. A Google Sheet can be chosen now; syncing to it arrives in a later version.</p>
