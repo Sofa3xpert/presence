@@ -24,6 +24,22 @@ jobs:
           uv export --format requirements-txt --frozen --no-dev --no-hashes --no-emit-project --no-header | diff - requirements.txt
           uv export --format requirements-txt --frozen --only-dev --no-hashes --no-emit-project --no-header | diff - requirements-dev.txt
 
+  tests:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [macos-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v5
+        with:
+          python-version: "3.12"
+      - name: Sync dependencies
+        run: uv sync
+      - name: Tests
+        run: uv run pytest -q
+
   pip:
     runs-on: ubuntu-latest
     steps:

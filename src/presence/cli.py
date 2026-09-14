@@ -4,7 +4,7 @@
     presence check [data_dir]         validate config, sources and delivery
     presence cycle [data_dir] [--send]  fetch → filter → tracker → brief (Telegram with --send)
     presence telegram pair [data_dir] capture your chat id after you message your bot
-    presence serve [data_dir] [--port] the local app: guided setup, tracker, run
+    presence serve [data_dir] [--port] [--no-browser]  the local app; opens your browser
     presence sheet sync [data_dir]    mirror the tracker to the connected Google Sheet
     presence import <csv> [data_dir]  bring an existing tracker in from a CSV export
 
@@ -17,6 +17,7 @@ from __future__ import annotations
 import argparse
 import os
 import sys
+import time
 from pathlib import Path
 
 from presence import __version__
@@ -27,26 +28,26 @@ from presence.core.secrets import get_secret
 from presence.cycle import run_cycle
 
 EXAMPLES = {
-    "profile.yaml": """# Facts Presence may use. Nothing runs until you set confirmed: true.
+    "profile.yaml": """# Facts Presence may use. Nothing runs until you confirm them in the app.
 identity:
   name: Your Name
   email: you@example.org
 work_authorization:
   summary: e.g. full right to work in the UK, no sponsorship needed
   needs_sponsorship: false
-skills: [python]
+skills: []
 confirmed: false
 """,
-    "sources.yaml": """# Boards to read — published APIs only. One company per source.
-# Find the board token in the company's careers URL (e.g. boards.greenhouse.io/<token>).
-sources:
-  - {id: figma, provider: greenhouse, label: Figma, config: {board: figma}}
-  - {id: palantir, provider: lever, label: Palantir, config: {board: palantir}}
+    "sources.yaml": """# Company job boards to read — through the interfaces those boards publish.
+# Add them in the app (Setup, step 5) by pasting a careers-page link, or here:
+#   - {id: acme, provider: greenhouse, label: Acme, config: {board: acme}}
+#   - {id: beta, provider: lever, label: Beta, config: {board: beta}}
+sources: []
 """,
-    "search.yaml": """# Your filters, applied to every source.
-locations: [London, United Kingdom, Remote]
+    "search.yaml": """# Your filters, applied to every board. Saved from the app (Setup, step 6).
+locations: []            # empty = anywhere; e.g. [London, Remote]
 remote_ok: true
-title_include: [engineer, scientist, developer, analyst, graduate]
+title_include: []        # empty = keep all titles; e.g. [analyst, graduate]
 # title_exclude defaults to senior/staff/principal/lead/manager/director titles
 blocklist: []
 freshness_hours: 336
@@ -59,7 +60,7 @@ agents:
   brief: {provider: local, model: "qwen3.5:9b", at: "09:00"}
 budget_tokens_per_day: 200000
 """,
-    "secrets.env": """# Local secrets — never leaves this machine. chmod 600.
+    "secrets.env": """# Local secrets — they never leave this computer.
 TELEGRAM_BOT_TOKEN=
 TELEGRAM_CHAT_ID=
 """,
@@ -77,8 +78,8 @@ def cmd_init(data: Path) -> int:
                 os.chmod(path, 0o600)
             written.append(name)
     print(f"initialised {data} — wrote {', '.join(written) or 'nothing (all present)'}")
-    print("next: edit profile.yaml (set confirmed: true), sources.yaml, search.yaml; "
-          "then `presence check` and `presence cycle`")
+    print("next: open the app (presence serve), confirm your profile and add a company "
+          "board; then `presence check` and `presence cycle`")
     return 0
 
 
@@ -114,7 +115,7 @@ def cmd_check(data: Path) -> int:
         problems += 1
         print(f"sources: {exc}")
     print("telegram: paired" if _telegram(data) else
-          "telegram: not paired (brief prints to the console; run `presence telegram pair`)")
+          "telegram: not paired (the brief prints here; pair it in the app, Setup step 2)")
     print("check:", "ready" if problems == 0 else f"{problems} problem(s) to fix")
     return 0 if problems == 0 else 1
 
@@ -134,13 +135,22 @@ def cmd_cycle(data: Path, send: bool) -> int:
     return 0
 
 
-def cmd_serve(data: Path, port: int) -> int:
-    from presence.app import create_app  # lazy: Flask only when serving
+def cmd_serve(data: Path, port: int | None, open_browser: bool = True) -> int:
+    from presence.app import run  # lazy: Flask only when serving
 
     if not any((data / n).exists() for n in EXAMPLES):
         cmd_init(data)
-    print(f"Presence app: http://127.0.0.1:{port}  (data: {data}) — Ctrl-C to stop")
-    create_app(data).run(host="127.0.0.1", port=port, debug=False)
+    url = run.serve(data, port=port, open_browser=open_browser, block=False)
+    thread = run.server_thread(url)
+    if thread is None:
+        print(f"Presence is already open at {url}")
+        return 0
+    print(f"Presence is at {url} — your data is in {data}. Press Ctrl-C to stop.")
+    try:
+        while thread.is_alive():  # the app and the daily run live in their own threads
+            time.sleep(1)
+    except KeyboardInterrupt:
+        print("\nPresence stopped.")
     return 0
 
 
@@ -226,7 +236,10 @@ def main(argv: list[str] | None = None) -> int:
         if name == "cycle":
             sp.add_argument("--send", action="store_true", help="deliver via Telegram")
         if name == "serve":
-            sp.add_argument("--port", type=int, default=8790)
+            sp.add_argument("--port", type=int, default=None,
+                            help="fixed port (default: the first free one from 8790)")
+            sp.add_argument("--no-browser", action="store_true",
+                            help="do not open the browser")
     tg = sub.add_parser("telegram").add_subparsers(dest="tg", required=True)
     tg.add_parser("pair").add_argument("data", type=Path, nargs="?", default=None)
     sh = sub.add_parser("sheet").add_subparsers(dest="sheet", required=True)
@@ -243,7 +256,7 @@ def main(argv: list[str] | None = None) -> int:
     if args.cmd == "cycle":
         return cmd_cycle(args.data, args.send)
     if args.cmd == "serve":
-        return cmd_serve(args.data, args.port)
+        return cmd_serve(args.data, args.port, open_browser=not args.no_browser)
     if args.cmd == "sheet":
         return cmd_sheet_sync(args.data)
     if args.cmd == "import":

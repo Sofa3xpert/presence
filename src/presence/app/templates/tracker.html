@@ -1,6 +1,6 @@
 {% extends "base.html" %}{% block content %}
 <h1>Tracker</h1>
-<p class="lede">{{ jobs|length }} role{{ '' if jobs|length == 1 else 's' }}{{ ' with status ' + status if status else '' }} · SQLite at <span class="mono">{{ data_dir }}/tracker.db</span></p>
+<p class="lede">{{ jobs|length }} role{{ '' if jobs|length == 1 else 's' }}{{ ' with status ' + status if status else '' }} · stored on this computer</p>
 <div class="row" style="gap:18px;align-items:flex-end">
 <form method="get" action="{{ url_for('tracker_page') }}"><label>Status<select name="status" onchange="this.form.submit()"><option value="">all</option>{% for s in statuses %}<option value="{{ s }}" {{ 'selected' if s == status }}>{{ s }}</option>{% endfor %}</select></label></form>
 <form method="post" action="{{ url_for('tracker_import') }}" enctype="multipart/form-data"><label>Import a CSV export<input type="file" name="csv" accept=".csv,text/csv" onchange="this.form.submit()"></label></form>

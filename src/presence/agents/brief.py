@@ -11,7 +11,8 @@ from presence.tracker import OPEN_STATUSES, Job, Tracker
 def compose_brief(tracker: Tracker, new_jobs: list[Job], errors: dict[str, str],
                   filtered_out: int = 0, today: date | None = None, limit: int = 10) -> str:
     today = today or date.today()
-    lines = [f"Presence · {today.strftime('%a %-d %b')}"]
+    # day without a leading zero, spelled by hand: strftime's %-d is not portable
+    lines = [f"Presence · {today:%a} {today.day} {today:%b}"]
     if new_jobs:
         lines.append(f"{len(new_jobs)} new role{'s' if len(new_jobs) != 1 else ''} worth a look"
                      + (f" ({filtered_out} filtered out)" if filtered_out else "") + ":")

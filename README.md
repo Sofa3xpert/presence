@@ -25,30 +25,59 @@ Four rules, enforced in code — see [CHARTER.md](CHARTER.md):
 3. **Your data stays on your machine.** No telemetry, no cloud account, no exceptions.
 4. **Hard daily spend cap.** The system can never surprise you with a bill.
 
-## Try it (developer preview)
+## Get Presence
 
-Nothing here is finished, but the loop runs end to end on published job-board
-APIs and delivers to your own Telegram bot:
+**macOS:** download the Presence app from the
+[GitHub Releases page](https://github.com/Sofa3xpert/presence/releases) and
+open it. That is the whole install.
+
+**Windows and Linux:** a packaged app is on its way. Until then, the
+developer route below works on any machine with Python 3.12.
+
+## What happens next
+
+1. Presence opens in your browser (only this computer can see the page).
+2. Six short steps: pick a model (free on this computer, or an API key),
+   pair your own Telegram bot by scanning a code, choose where the tracker
+   lives, read your CV and confirm the facts, paste a few companies' careers
+   pages, set your filters.
+3. Every morning, while Presence is open, it reads those boards, applies your
+   filters, updates the tracker and sends you a short brief — or shows it on
+   the Run page if Telegram is not paired. You can also press **Run now**.
+4. You apply. Presence never sends, submits or posts anything for you.
+
+## Your data
+
+Everything lives in one folder on your computer; the **Open data folder**
+button in the app takes you there.
+
+| System  | Folder                                        |
+|---------|-----------------------------------------------|
+| macOS   | `~/Library/Application Support/Presence`      |
+| Windows | `%APPDATA%\Presence`                          |
+| Linux   | `~/.local/share/presence`                     |
+
+No account, no telemetry, no requests to anyone but the boards you chose,
+your own Telegram bot and the model you picked. The pages are drawn with
+fonts that ship with Presence.
+
+## For developers
+
+The loop runs end to end on published job-board APIs and delivers to your own
+Telegram bot. The `presence` command has an app and a plain command line:
 
 ```bash
 git clone https://github.com/Sofa3xpert/presence.git && cd presence
 uv sync
-uv run presence init ~/presence-data          # writes example config files
-# edit ~/presence-data/profile.yaml (set confirmed: true), sources.yaml, search.yaml
-uv run presence check ~/presence-data
-uv run presence cycle ~/presence-data         # fetch → filter → tracker → brief (printed)
-# optional Telegram delivery: put your @BotFather token in secrets.env, message the bot, then
-uv run presence telegram pair ~/presence-data
-uv run presence cycle ~/presence-data --send
+uv run presence serve            # the app: opens your browser, keeps the daily run alive
+uv run presence check            # is everything in place?
+uv run presence cycle            # one run, brief printed
+uv run presence cycle --send     # …delivered to Telegram once it is paired in the app
 ```
 
-The guided setup lives in the local app — model (Ollama one-click or an API
-key), Telegram pairing by QR, tracker (SQLite here, or a Google Sheet mirror),
-CV, boards, filters:
-
-```bash
-uv run presence serve ~/presence-data           # then open http://127.0.0.1:8790
-```
+The data folder defaults to the location above; `PRESENCE_DATA=<folder>` or a
+positional `[data_dir]` overrides it. `presence serve --port N --no-browser`
+pins the port and skips the browser.
 
 Without uv, on a fresh machine (Python 3.12):
 
@@ -56,24 +85,19 @@ Without uv, on a fresh machine (Python 3.12):
 git clone https://github.com/Sofa3xpert/presence.git && cd presence
 python3.12 -m venv .venv && source .venv/bin/activate   # Windows: .venv\Scripts\activate
 pip install -r requirements.txt && pip install -e .
-presence serve ~/presence-data
+presence serve
 ```
 
 `requirements.txt` is exported from `uv.lock` (`requirements-dev.txt` adds
-pytest and ruff); CI fails if either drifts from the lock.
+pytest and ruff); CI fails if either drifts from the lock. CI runs the tests
+on Ubuntu, macOS and Windows.
 
 With Docker: `docker compose run --rm presence init /data`, then the same
 commands with `/data` (the `./data` folder on the host holds everything).
 
 Not there yet: Scout's judgment and tiering (the cycle currently applies your
-filters only), alert-email intake, scheduled runs, the apply extension. See the
-architecture document for the plan.
-
-## Status: pre-alpha
-
-Nothing runnable yet — this repository is the foundation commit of a system
-being extracted from a private pipeline that has run in production since
-August 2026 (6 agents, 7 connector types, 587 tracked applications).
+filters only), alert-email intake, the apply extension. See the architecture
+document for the plan.
 
 **v1 scope** (see the architecture document, coming to `docs/`):
 the user's chosen job boards (published APIs only), two agents (Scout + Brief), SQLite tracker,

@@ -1,6 +1,7 @@
 """End-to-end through the command line, with a fake source and a fake Telegram."""
 
 import json
+import os
 
 import pytest
 
@@ -9,17 +10,38 @@ from presence.adapters import telegram
 from presence.adapters.telegram import chunks, latest_chat_id
 from presence.connectors import Posting
 
+SOURCES = """sources:
+  - {id: figma, provider: greenhouse, label: Figma, config: {board: figma}}
+  - {id: palantir, provider: lever, label: Palantir, config: {board: palantir}}
+"""
+
 
 def _confirm(data):
     p = data / "profile.yaml"
     p.write_text(p.read_text().replace("confirmed: false", "confirmed: true"))
+    (data / "sources.yaml").write_text(SOURCES)
+
+
+def test_init_writes_neutral_defaults(tmp_path):
+    assert cli.main(["init", str(tmp_path)]) == 0
+    sources = (tmp_path / "sources.yaml").read_text()
+    assert "sources: []" in sources and "figma" not in sources.lower()
+    search = (tmp_path / "search.yaml").read_text()
+    assert "locations: []" in search and "title_include: []" in search
+    assert "London" not in search.split("#")[0]
+    for name in cli.EXAMPLES:
+        assert "chmod" not in (tmp_path / name).read_text()
 
 
 def test_init_check_and_refusal_before_confirmation(tmp_path, capsys):
     assert cli.main(["init", str(tmp_path)]) == 0
-    assert (tmp_path / "secrets.env").stat().st_mode & 0o777 == 0o600
+    if os.name != "nt":
+        assert (tmp_path / "secrets.env").stat().st_mode & 0o777 == 0o600
+    capsys.readouterr()
     assert cli.main(["check", str(tmp_path)]) == 1  # profile unconfirmed
-    assert "confirmed: false" in capsys.readouterr().out
+    out = capsys.readouterr().out
+    assert "Confirm your profile first in Setup, step 4" in out
+    assert "profile.yaml" not in out and "edit" not in out
     assert cli.main(["cycle", str(tmp_path)]) == 1  # charter rule 2: refuses to run
 
 

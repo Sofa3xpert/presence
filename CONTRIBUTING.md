@@ -26,6 +26,16 @@ un-hiding alone doesn't stick. Fix: `uv run --no-sync python scripts/doctor.py`
 **keep the repo outside iCloud-synced folders** (e.g. `~/dev/presence`).
 Tests are immune either way — `tests/conftest.py` puts `src` on the path.
 
+## Working in parallel
+
+Several people (and agents) work on Presence at once, each on its own branch
+in its own `git worktree` — never on a shared checkout of `main`. Each branch
+owns a list of files; touching a file outside that list is a merge conflict
+waiting to happen, so if you need a hook in someone else's file, add it as a
+clearly separate block and say so in the pull request. Shared files
+(`app/server.py`, `templates/setup.html`) are owned by region: never reformat
+them wholesale — `ruff check --fix` only, long lines fixed by hand.
+
 ## Ground rules
 
 - Read [CHARTER.md](CHARTER.md) first. PRs that weaken a charter rule will be

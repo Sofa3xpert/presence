@@ -100,13 +100,16 @@ def load_yaml_model[M: BaseModel](path: Path, model: type[M]) -> M:
     """Load and validate one YAML file, translating failures into messages
     that name the file, the field and what to do."""
     if not path.exists():
-        raise ConfigError(f"{path.name} not found in {path.parent} — create it or rerun onboarding")
+        raise ConfigError(
+            f"{path.name} is missing from your Presence data folder — open Setup once "
+            "and it is written again"
+        )
     try:
         raw = yaml.safe_load(path.read_text())
     except yaml.YAMLError as exc:
-        raise ConfigError(f"{path.name} is not valid YAML: {exc}") from exc
+        raise ConfigError(f"{path.name} could not be read: {exc}") from exc
     if raw is None:
-        raise ConfigError(f"{path.name} is empty — create it or rerun onboarding")
+        raise ConfigError(f"{path.name} is empty — open Setup once and it is written again")
     try:
         return model.model_validate(raw)
     except ValidationError as exc:
@@ -121,8 +124,8 @@ def load_profile(data_dir: Path) -> Profile:
     profile = load_yaml_model(data_dir / "profile.yaml", Profile)
     if not profile.confirmed:
         raise ConfigError(
-            "profile.yaml has confirmed: false — Presence acts only on facts the "
-            "customer has confirmed. Review the profile and set confirmed: true."
+            "Confirm your profile first in Setup, step 4 — Presence acts only on "
+            "facts you have confirmed."
         )
     return profile
 

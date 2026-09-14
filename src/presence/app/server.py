@@ -6,13 +6,21 @@ from __future__ import annotations
 import csv
 import io
 import json
+import os
 import secrets as pysecrets
-from datetime import date
+import subprocess
+import sys
+import time
+from datetime import date, datetime
 from pathlib import Path
 from typing import Any
 
+import yaml
 from flask import Flask, flash, jsonify, redirect, render_template, request, url_for
+from markupsafe import Markup, escape
+from werkzeug.exceptions import HTTPException
 
+from presence import __version__
 from presence.adapters import (
     TelegramError,
     TelegramMessenger,
@@ -23,6 +31,7 @@ from presence.adapters import (
     pairing_link,
 )
 from presence.app import ollama, qr
+from presence.app import run as runner
 from presence.app.boards_ui import detect
 from presence.app.config_io import read_secrets, read_yaml, write_secret, write_yaml
 from presence.app.cvparse import extract_text, guess_fields
@@ -52,6 +61,87 @@ def sheet_client_for(data: Path) -> Any:
 def _bot(data: Path) -> dict[str, Any]:
     f = data / "telegram_bot.json"
     return json.loads(f.read_text()) if f.exists() else {}
+
+
+PROVIDER_NAMES = {"local": "on this computer", "anthropic": "Anthropic", "openai": "OpenAI"}
+MODEL_CACHE_SECONDS = 4.0
+_model_cache: dict[str, Any] = {"key": None, "at": 0.0, "value": False}
+
+
+def model_ready(kind: str, model: str, base_url: str, secrets: dict[str, str]) -> bool:
+    """Is the chosen model actually usable right now? Local: Ollama answers and
+    has the model (checked at most every few seconds). API: a key is saved."""
+    if not model:
+        return False
+    if kind == "anthropic":
+        return bool(secrets.get("ANTHROPIC_API_KEY"))
+    if kind == "openai":
+        return bool(secrets.get("OPENAI_API_KEY"))
+    root = base_url.removesuffix("/v1").rstrip("/") or ollama.DEFAULT_URL
+    key = (root, model)
+    now = time.monotonic()
+    if _model_cache["key"] == key and now - _model_cache["at"] < MODEL_CACHE_SECONDS:
+        return bool(_model_cache["value"])
+    try:
+        st = ollama.status(root)
+        value = bool(st.get("running")) and model in (st.get("models") or [])
+    except Exception:
+        value = False
+    _model_cache.update({"key": key, "at": now, "value": value})
+    return value
+
+
+def open_folder(path: Path) -> str:
+    """Show a folder in the desktop file manager. Returns an error text, or ''."""
+    cmd = (["open", str(path)] if sys.platform == "darwin"
+           else ["explorer", str(path)] if os.name == "nt"
+           else ["xdg-open", str(path)])
+    try:
+        subprocess.Popen(cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    except Exception as exc:
+        return f"could not open the folder ({type(exc).__name__})"
+    return ""
+
+
+PARSED_FILES = ("presence.yaml", "profile.yaml", "search.yaml", "sources.yaml",
+                "cv_draft.json", "telegram_bot.json", "scheduler.json", gsheet.STATE_FILE)
+
+
+def broken_file(data: Path) -> str:
+    """Which settings file cannot be read, if any — so an error names it."""
+    for name in PARSED_FILES:
+        path = data / name
+        if not path.exists():
+            continue
+        try:
+            text = path.read_text()
+            json.loads(text) if name.endswith(".json") else yaml.safe_load(text)
+        except Exception:
+            return name
+    return ""
+
+
+def readiness(state: dict[str, Any]) -> list[dict[str, Any]]:
+    """The Run page checklist. Required items gate the Run button."""
+    return [
+        {"label": "Your profile is confirmed", "ok": state["profile_confirmed"],
+         "required": True, "hint": "Setup, step 4", "step": 4},
+        {"label": "At least one company board is on", "ok": state["sources_done"],
+         "required": True, "hint": "Setup, step 5", "step": 5},
+        {"label": "The model is ready", "ok": state["model_done"], "required": False,
+         "hint": "optional for now — Setup, step 1", "step": 1},
+        {"label": "Telegram is paired", "ok": state["telegram_paired"], "required": False,
+         "hint": "optional — the brief shows here instead; Setup, step 2", "step": 2},
+    ]
+
+
+def run_blocker(state: dict[str, Any]) -> str:
+    """Why the Run button is off, in one sentence — or '' when it may run."""
+    if not state["profile_confirmed"]:
+        return "Confirm your profile first in Setup, step 4"
+    if not state["sources_done"]:
+        return "Add at least one company's careers page in Setup, step 5"
+    return ""
 
 
 def _state(data: Path) -> dict[str, Any]:
@@ -85,7 +175,8 @@ def _state(data: Path) -> dict[str, Any]:
             "base_url": pcfg.get("base_url", "http://localhost:11434/v1"),
             "has_key": bool(sec.get("ANTHROPIC_API_KEY") or sec.get("OPENAI_API_KEY")),
         },
-        "model_done": bool(scout.get("model")),
+        "model_done": model_ready(kind, scout.get("model", ""),
+                                  str(pcfg.get("base_url") or ""), sec),
         "telegram_token": bool(sec.get("TELEGRAM_BOT_TOKEN")),
         "telegram_paired": bool(sec.get("TELEGRAM_BOT_TOKEN") and sec.get("TELEGRAM_CHAT_ID")),
         "bot": bot,
@@ -110,6 +201,8 @@ def _state(data: Path) -> dict[str, Any]:
         "profile_confirmed": bool(profile.get("confirmed")),
         "cv_chars": draft.get("text_chars", 0),
         "sources": sources,
+        "sources_done": any(s.get("enabled", True) for s in sources),
+        "filters_done": bool(search.get("saved_at")),
         "filters": {
             "locations": ", ".join(search.get("locations") or []),
             "title_include": ", ".join(search.get("title_include") or []),
@@ -127,6 +220,42 @@ def create_app(data: Path) -> Flask:
     @app.context_processor
     def _ctx() -> dict[str, Any]:
         return {"data_dir": str(data)}
+
+    @app.get("/health")
+    def health():
+        return jsonify({"app": "presence", "version": __version__})
+
+    @app.post("/data/open")
+    def data_open():
+        err = open_folder(data)
+        flash(err or "your data folder is open in a window", "error" if err else "message")
+        return redirect(request.form.get("back") or url_for("setup"))
+
+    @app.errorhandler(ConfigError)
+    def _config_error(exc: ConfigError):
+        if request.path == "/":
+            return _error_page(exc)
+        flash(Markup(f'{escape(str(exc))} — <a href="{url_for("setup")}">open Setup</a>'),
+              "error")
+        return redirect(url_for("setup"))
+
+    @app.errorhandler(Exception)
+    def _any_error(exc: Exception):
+        if isinstance(exc, HTTPException):
+            return exc
+        app.logger.exception("request failed")
+        return _error_page(exc)
+
+    def _error_page(exc: Exception):
+        broken = broken_file(data)
+        parse = isinstance(exc, yaml.YAMLError | json.JSONDecodeError | ConfigError) or broken
+        sentence = ("Something went wrong reading your settings." if parse
+                    else "Something went wrong.")
+        details = f"{type(exc).__name__}: {exc}"
+        if broken:
+            details = f"file: {broken}\n{details}"
+        return render_template("error.html", page="error", sentence=sentence,
+                               details=details, broken=broken), 500
 
     @app.get("/")
     def setup():
@@ -173,7 +302,7 @@ def create_app(data: Path) -> Flask:
         }
         cfg.setdefault("budget_tokens_per_day", 200_000)
         write_yaml(data / "presence.yaml", cfg)
-        flash(f"model saved: {kind} · {model}")
+        flash(f"model saved — {PROVIDER_NAMES.get(kind, kind)}, {model}")
         return redirect(url_for("setup"))
 
     ollama.bind(data)  # the embedded local engine lives in this data folder
@@ -512,13 +641,23 @@ def create_app(data: Path) -> Flask:
     @app.post("/setup/cv")
     def setup_cv():
         f = request.files.get("cv")
-        if not f or not f.filename:
-            flash("choose a PDF first", "error")
+        pasted = request.form.get("cv_text", "").strip()
+        if pasted:
+            text = pasted
+        elif not f or not f.filename:
+            flash("choose a file, or paste your CV text", "error")
             return redirect(url_for("setup"))
-        try:
-            text = extract_text(f.read())
-        except Exception as exc:
-            flash(f"could not read that PDF: {type(exc).__name__}", "error")
+        elif f.filename.lower().endswith(".txt") or f.mimetype == "text/plain":
+            text = f.read().decode("utf-8", errors="replace")
+        else:
+            try:
+                text = extract_text(f.read())
+            except Exception:
+                flash("Presence could not read that file. Try a PDF or a plain text file, "
+                      "or paste the text of your CV instead.", "error")
+                return redirect(url_for("setup"))
+        if not text.strip():
+            flash("that CV is empty — try another file, or paste the text", "error")
             return redirect(url_for("setup"))
         fields = guess_fields(text)
         (data / "cv_draft.json").write_text(
@@ -559,11 +698,13 @@ def create_app(data: Path) -> Flask:
         if url:
             hit = detect(url)
             if not hit:
-                flash("that URL isn't a board on a published API Presence supports", "error")
+                flash("Presence can't read that site yet — it works with careers pages on "
+                      "Greenhouse, Lever, Ashby, Workable and SmartRecruiters", "error")
                 return redirect(url_for("setup"))
             provider, board = hit
         if provider not in {c["provider"] for c in available()} or not board:
-            flash("pick a provider and a board token", "error")
+            flash("paste a careers-page link, or open Advanced and fill in the provider "
+                  "and board name", "error")
             return redirect(url_for("setup"))
         label = request.form.get("label", "").strip() or board.replace("-", " ").title()
         cfg = read_yaml(data / "sources.yaml")
@@ -613,6 +754,7 @@ def create_app(data: Path) -> Flask:
             }
         )
         cfg.setdefault("blocklist", [])
+        cfg["saved_at"] = datetime.now().isoformat(timespec="seconds")
         write_yaml(data / "search.yaml", cfg)
         flash("filters saved")
         return redirect(url_for("setup"))
@@ -647,22 +789,41 @@ def create_app(data: Path) -> Flask:
             t.close()
         return redirect(url_for("tracker_page"))
 
+    def _run_context(**extra: Any) -> dict[str, Any]:
+        state = _state(data)
+        return {
+            "page": "run",
+            "checks": readiness(state),
+            "blocker": run_blocker(state),
+            "telegram_paired": state["telegram_paired"],
+            "next_run": runner.next_run(data),
+            **extra,
+        }
+
     @app.get("/run")
     def run_page():
         last = data / "last_brief.txt"
-        return render_template(
-            "run.html", page="run", brief=last.read_text() if last.exists() else "", errors={}
-        )
+        return render_template("run.html", **_run_context(
+            brief=last.read_text() if last.exists() else "", errors={}))
 
     @app.post("/run")
     def run_now():
         send = request.form.get("send") == "1"
+        blocker = run_blocker(_state(data))
+        if blocker:
+            flash(blocker, "error")
+            return redirect(url_for("run_page"))
         try:
             brief, errors, delivered = run_cycle(data, send=send)
         except (ConfigError, TelegramError) as exc:
             flash(str(exc), "error")
             return redirect(url_for("run_page"))
-        flash("cycle complete" + (" — brief sent to Telegram" if delivered else ""))
-        return render_template("run.html", page="run", brief=brief, errors=errors)
+        if delivered:
+            flash("done — the brief was sent to Telegram")
+        elif send:
+            flash("done — Telegram is not paired, so the brief is shown here instead", "error")
+        else:
+            flash("done — here is your brief")
+        return render_template("run.html", **_run_context(brief=brief, errors=errors))
 
     return app

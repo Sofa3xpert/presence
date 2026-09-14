@@ -25,11 +25,13 @@ def _from_env_file(name: str, data_dir: Path) -> str | None:
     path = data_dir / "secrets.env"
     if not path.exists():
         return None
-    mode = stat.S_IMODE(path.stat().st_mode)
-    if mode & 0o077:
+    # POSIX file modes only; Windows reports 0o666 for everything and protects
+    # the folder through the account instead.
+    if os.name != "nt" and stat.S_IMODE(path.stat().st_mode) & 0o077:
         warnings.warn(
-            f"{path} is readable by other users (mode {oct(mode)}) — "
-            f"run: chmod 600 {path}",
+            f"{path.name} in your Presence data folder can be read by other accounts "
+            "on this computer. Presence still works; consider restricting the file "
+            "to your own account.",
             stacklevel=2,
         )
     for line in path.read_text().splitlines():
