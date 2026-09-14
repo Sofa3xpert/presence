@@ -18,12 +18,19 @@ dependencies = [
     "segno>=1.6.6",
     "google-auth>=2.58.0",
     "google-auth-oauthlib>=1.4.1",
+    "keyring>=25.7.0",
+    "zstandard>=0.23",
 ]
 
 [dependency-groups]
 dev = [
     "pytest>=8.0",
     "ruff>=0.6",
+]
+macapp = [
+    "pyinstaller>=6.22,<7",
+    "pyobjc-framework-cocoa>=12",
+    "rumps>=0.4.0",
 ]
 
 [project.scripts]
