@@ -1,6 +1,6 @@
 # Follow-up writer — design
 
-Status: design, nothing implemented. Branch `followup-writer`. 14 Sep 2026.
+Status: design agreed, nothing implemented. Branch `followup-writer`. 14–15 Sep 2026.
 
 ## What it is
 
@@ -139,10 +139,24 @@ anyone; the same principle as the drills and simulations.
 Sending, scheduling sends, finding recruiters' names or addresses, reading
 LinkedIn, any message that is not about a job the person applied to.
 
-## Open questions for Denis
+## Decisions (Denis, 15 Sep 2026)
 
-1. Facts list: draft it from the CV at setup (the person confirms each line),
-   or ask for it fresh in the profile step?
-2. Should a thank-you after an interview be part of this writer or a separate,
-   simpler one?
-3. LinkedIn message vs connection note: support both cuts, or the message only?
+1. **Facts list.** Two functions. The default is lazy: Presence drafts the
+   facts from the CV at setup and the person confirms or edits each line. The
+   second is a short conversation: Presence asks about their work fresh, in
+   their words, and writes the facts from the answers. Either way nothing is
+   used until confirmed (charter rule 2).
+2. **Thank-you after an interview.** Not in this writer. Left for later.
+3. **LinkedIn.** Both cuts are supported: the message (under 600 characters)
+   and the connection note (under 280). Both are copy-and-paste only. Presence
+   never reads LinkedIn, never posts to it, and never touches any LinkedIn
+   endpoint, official or reverse-engineered, whatever a jurisdiction may
+   tolerate. A product that leans on a leaked interface breaks the day the
+   interface is tightened, and the person is left with nothing. The same rule
+   holds for every other site: only interfaces a provider offers.
+
+## Next step
+
+Implementation waits for the consumer release to settle. When it starts:
+the facts step in setup first (it is useful on its own), then extract → match
+on fixture descriptions with the eval harness, then compose and deliver.
