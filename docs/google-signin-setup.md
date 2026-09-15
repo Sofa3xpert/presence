@@ -73,7 +73,9 @@ Labels are the ones the Google Workspace guides use as of 2026-09-03.
    **Download JSON immediately**. Since June 2025 the secret is shown and
    downloadable only at creation; afterwards Google stores a hash. If it is
    lost, use the client's *rotate secret* action to get a new one.
-7. **Store it.** In the GitHub repository → Settings → Secrets and variables →
+7. **Store it.** Easiest: `python3 scripts/set_google_secrets.py ~/Downloads/<the
+   downloaded file>.json` — it reads the file and stores both secrets through
+   `gh`, printing only their names. By hand instead: In the GitHub repository → Settings → Secrets and variables →
    Actions → New repository secret, twice:
    `PRESENCE_GOOGLE_CLIENT_ID` = the `client_id` value,
    `PRESENCE_GOOGLE_CLIENT_SECRET` = the `client_secret` value.
