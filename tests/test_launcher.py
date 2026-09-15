@@ -96,11 +96,15 @@ def test_pick_port_falls_back_when_taken(launcher):
 
 
 class _Resp:
-    def __init__(self, status):
+    def __init__(self, status, body=b""):
         self.status = status
+        self.body = body
 
     def getcode(self):
         return self.status
+
+    def read(self):
+        return self.body
 
     def __enter__(self):
         return self
@@ -109,17 +113,25 @@ class _Resp:
         return False
 
 
-def test_presence_answers_on_health_or_root(launcher):
+def test_presence_answers_only_to_a_current_presence(launcher):
     calls = []
 
     def opener(url, timeout):
         calls.append(url)
-        if url.endswith("/health"):
-            raise urllib.error.HTTPError(url, 404, "nope", {}, None)
-        return _Resp(200)
+        return _Resp(200, b'{"app": "presence", "version": "0.0.1"}')
 
     assert launcher.presence_answers(8790, opener=opener) is True
-    assert calls == ["http://127.0.0.1:8790/health", "http://127.0.0.1:8790/"]
+    assert calls == ["http://127.0.0.1:8790/health"]
+
+    def older_presence(url, timeout):  # no /health: the page would not be this app's
+        raise urllib.error.HTTPError(url, 404, "nope", {}, None)
+
+    assert launcher.presence_answers(8790, opener=older_presence) is False
+
+    def other_server(url, timeout):
+        return _Resp(200, b"<html>not presence</html>")
+
+    assert launcher.presence_answers(8790, opener=other_server) is False
 
 
 def test_presence_answers_false_when_nothing_listens(launcher):

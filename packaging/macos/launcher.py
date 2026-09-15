@@ -16,6 +16,7 @@ Environment knobs (developers only): ``PRESENCE_PORT`` preferred port,
 
 from __future__ import annotations
 
+import json
 import os
 import socket
 import subprocess
@@ -111,17 +112,21 @@ def pick_port(preferred: int = PREFERRED_PORT, host: str = HOST) -> int:
 
 
 def presence_answers(port: int, host: str = HOST, timeout: float = 1.0, opener=None) -> bool:
-    """True when something on ``host:port`` answers 200 on /health or /."""
+    """True only when a current Presence answers /health on ``host:port``.
+
+    Any other listener — an older Presence without /health, or some unrelated
+    local server — must not be mistaken for a running copy: the browser would
+    land on a page this app does not serve."""
     opener = opener or urllib.request.urlopen
-    for path in ("/health", "/"):
-        try:
-            with opener(f"http://{host}:{port}{path}", timeout=timeout) as resp:
-                status = getattr(resp, "status", None) or resp.getcode()
-                if status == 200:
-                    return True
-        except (urllib.error.URLError, OSError, ValueError):
-            continue
-    return False
+    try:
+        with opener(f"http://{host}:{port}/health", timeout=timeout) as resp:
+            status = getattr(resp, "status", None) or resp.getcode()
+            if status != 200:
+                return False
+            body = json.loads(resp.read().decode("utf-8", errors="replace") or "{}")
+            return body.get("app") == "presence"
+    except (urllib.error.URLError, OSError, ValueError):
+        return False
 
 
 def needs_init(data: Path) -> bool:
