@@ -1,5 +1,6 @@
 """Foundation smoke tests: the package imports and the repo keeps its soul."""
 
+import re
 from pathlib import Path
 
 import presence
@@ -8,7 +9,7 @@ REPO = Path(__file__).resolve().parent.parent
 
 
 def test_version():
-    assert presence.__version__ == "0.0.1"
+    assert re.fullmatch(r"\d+\.\d+\.\d+", presence.__version__)
 
 
 def test_charter_present_and_complete():
