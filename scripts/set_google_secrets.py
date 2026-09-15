@@ -32,7 +32,7 @@ def main(argv: list[str]) -> int:
         print("that is not a Desktop-app client file (no installed.client_id / client_secret)")
         return 1
     failed = 0
-    for name, value in zip(NAMES, values):  # plain zip: this runs on any python3
+    for name, value in zip(NAMES, values):  # noqa: B905 — must run on any python3
         r = subprocess.run(["gh", "secret", "set", name, "-R", repo], input=value, text=True,
                            capture_output=True)
         ok = r.returncode == 0
