@@ -1,0 +1,442 @@
+{% extends "base.html" %}{% block content %}
+<h1>Set up Presence</h1>
+<p class="lede">Five steps, two of them required. Everything you enter stays on this computer unless a marker says otherwise.</p>
+<div class="legend"><span>Where things go:</span> <span class="where local" title="Kept on this computer. It leaves only if you send it somewhere yourself."><svg class="plant"><use href="#plant-local"/></svg>on this computer</span> <span class="where yours" title="Goes to a place that is yours: your phone, your own Google Drive."><svg class="plant"><use href="#plant-yours"/></svg>to a place you own</span> <span class="where cloud" title="Handled by a company's service under your own key or account. They see what is sent."><svg class="plant"><use href="#plant-cloud"/></svg>through a service</span></div>
+
+<section class="step {{ 'done' if state.profile_confirmed else 'todo' }}"><h2>1 · Your CV<span class="need req">required</span></h2>
+<p class="dataflow">Your CV is read here and the facts below are kept here <span class="where local" title="Kept on this computer. It leaves only if you send it somewhere yourself."><svg class="plant"><use href="#plant-local"/></svg>on this computer</span>. Nothing about you leaves this computer unless you send it somewhere yourself, later, on purpose. You can keep several versions of your CV, one per kind of role, and note which one each application used.</p>
+<div class="split">
+<div class="main">
+<p class="hint">Add a CV as a PDF or a plain text file, or paste the text. Presence reads it on this computer, fills the form, and you correct and confirm. Nothing runs before you confirm.</p>
+
+<form method="post" action="{{ url_for('setup_cv') }}" enctype="multipart/form-data" class="stack">
+  <div class="row" style="align-items:flex-end">
+    <label>CV file (PDF or text)<input type="file" name="cv" accept=".pdf,.txt,application/pdf,text/plain"></label>
+    <label>Name for this version<input type="text" name="label" placeholder="e.g. Data analyst, AI engineer"></label>
+    <button>Add this CV</button>
+  </div>
+  <details><summary>No file handy? Paste the text of your CV</summary>
+    <label>CV text<textarea name="cv_text" placeholder="Paste your CV here, then press Read my CV"></textarea></label>
+  </details>
+</form>
+<form method="post" action="{{ url_for('setup_profile') }}" class="stack" style="margin-top:12px">
+  <div class="row">
+    <label>Name<input type="text" name="name" value="{{ state.profile.name }}"></label>
+    <label>Email<input type="text" name="email" value="{{ state.profile.email }}"></label>
+    <label>Phone<input type="text" name="phone" value="{{ state.profile.phone }}"></label>
+  </div>
+  <label>Right to work (say it plainly — Presence follows this strictly)<input type="text" name="work_auth" value="{{ state.profile.work_auth }}" placeholder="e.g. UK Graduate visa, full right to work, no sponsorship needed"></label>
+  <div class="field"><span class="fieldname">Skills</span> <span class="hint" style="display:inline;margin:0">from your CV; type one and press comma or Enter to add, × to drop</span>
+    <div class="chips" data-name="skills"><input type="hidden" name="skills" value="{{ state.profile.skills }}"><input type="text" class="chip-input" placeholder="add a skill" aria-label="add a skill"></div></div>
+  <div class="field"><span class="fieldname">Links</span> <span class="hint" style="display:inline;margin:0">GitHub, LinkedIn, portfolio</span>
+    <div class="chips" data-name="links"><input type="hidden" name="links" value="{{ state.profile.links }}"><input type="text" class="chip-input" placeholder="add a link" aria-label="add a link"></div></div>
+  <label style="flex-direction:row;align-items:center;gap:8px"><input type="checkbox" name="confirmed" value="1" {{ 'checked' if state.profile_confirmed }}> I have checked these facts — Presence may use them</label>
+  <div><button>Save profile</button></div>
+</form>
+<script>
+(function () {
+  document.querySelectorAll('.chips').forEach(box => {
+    const hidden = box.querySelector('input[type=hidden]'), input = box.querySelector('.chip-input');
+    let values = hidden.value.split(',').map(v => v.trim()).filter(Boolean);
+    function sync() { hidden.value = values.join(', '); }
+    function render() {
+      box.querySelectorAll('.chip').forEach(c => c.remove());
+      values.forEach((v, i) => {
+        const chip = document.createElement('span'); chip.className = 'chip'; chip.textContent = v;
+        const x = document.createElement('button'); x.type = 'button'; x.textContent = '×'; x.setAttribute('aria-label', 'remove ' + v);
+        x.addEventListener('click', () => { values.splice(i, 1); sync(); render(); });
+        chip.appendChild(x); box.insertBefore(chip, input);
+      });
+      sync();
+    }
+    function add(raw) {
+      raw.split(/[,\n]/).map(v => v.trim()).filter(Boolean).forEach(v => {
+        if (!values.some(e => e.toLowerCase() === v.toLowerCase())) values.push(v);
+      });
+      input.value = ''; render();
+    }
+    input.addEventListener('keydown', e => {
+      if (e.key === ',' || e.key === 'Enter') { e.preventDefault(); add(input.value); }
+      else if (e.key === 'Backspace' && !input.value && values.length) { values.pop(); render(); }
+    });
+    input.addEventListener('blur', () => { if (input.value.trim()) add(input.value); });
+    input.addEventListener('paste', e => { const t = (e.clipboardData || window.clipboardData).getData('text'); if (t.includes(',') || t.includes('\n')) { e.preventDefault(); add(t); } });
+    box.addEventListener('click', e => { if (e.target === box) input.focus(); });
+    render();
+  });
+})();
+</script>
+</div>
+<aside class="cvbox">
+<h3>Your CVs</h3>
+{% if state.cvs %}
+{% for c in state.cvs %}<div class="cvcard">
+  <a class="thumb" href="{{ url_for('cv_file', cv_id=c.id) }}" target="_blank" rel="noopener" title="open this CV">{% if c.has_preview %}<img src="{{ url_for('cv_preview', cv_id=c.id) }}" alt="first page of {{ c.label }}">{% else %}<div class="txt">{{ c.label }}</div>{% endif %}</a>
+  <div class="body">
+    <div class="name">{{ c.label }}{% if c.is_default %} <span class="pill on">default</span>{% endif %}</div>
+    <div class="meta">{{ c.kind|upper }} · {{ c.chars }} characters · added {{ c.added[:10] }}{% if c.read_with %} · read with {{ c.read_with }}{% else %} · rough read{% endif %}</div>
+    {% if state.model_done %}<form method="post" action="{{ url_for('cv_read', cv_id=c.id) }}" class="cv-read" data-cv="{{ c.id }}"><button class="quiet small">{{ 'Read again with the model' if c.read_with else 'Read properly with the model' }}</button> <span class="hint read-status" style="margin:0"></span></form>{% else %}<div class="hint" style="margin:2px 0 4px">Rough read: simple matching found the facts above. Set up the model in step 3 and Presence reads it properly.</div>{% endif %}
+    <form method="post" action="{{ url_for('cv_fill', cv_id=c.id) }}"><button class="quiet small">Fill the form from this CV</button></form>
+    {% if not c.is_default %}<form method="post" action="{{ url_for('cv_default', cv_id=c.id) }}"><button class="quiet small">Make default</button></form> {% endif %}
+    <form method="post" action="{{ url_for('cv_rename', cv_id=c.id) }}"><input type="text" name="label" value="{{ c.label }}" aria-label="rename"><button class="quiet small">Rename</button></form>
+    <form method="post" action="{{ url_for('cv_remove', cv_id=c.id) }}"><button class="danger small">Remove</button></form>
+  </div>
+</div>{% endfor %}
+<p class="hint" style="margin:8px 0 0">A rough read uses simple matching; a proper read uses your model and finds skills and links a keyword list cannot. Until you confirm, each CV you add fills the form. After that, use "Fill the form from this CV" when you want to. The default one is offered first when you record an application on the Tracker page.</p>
+{% else %}
+<p class="hint" style="margin:0">No CV yet. The first one you add becomes the default.</p>
+{% endif %}
+<div class="cvbox" style="margin-top:14px;border-width:1px 0 0;padding:12px 0 0;background:none">
+<h3>Your stories</h3>
+<p class="hint">Things you have done, in your own words. Presence draws on them when it writes with you. Unconfirmed ones came from your CV; keep the true ones.</p>
+{% set drafts = state.stories|rejectattr('confirmed')|list %}
+{% if drafts %}<p class="hint"><strong>{{ drafts|length }} drafted from your CV</strong> — keep the ones that are true, fix the wording, or remove the rest.</p>{% endif %}
+{% for s in state.stories|reverse %}<div class="cvcard" style="display:block">
+  <div>{{ s.text }}</div>
+  <div class="meta" style="margin:4px 0 6px;font-size:12px">{% for t in s.tags %}<span class="pill" style="font-size:11px;padding:1px 7px">{{ t }}</span> {% endfor %}{% if s.confirmed %}<span class="pill on">kept</span>{% else %}<span class="pill off">from your CV — keep?</span>{% endif %}</div>
+  {% if not s.confirmed %}<form method="post" action="{{ url_for('story_confirm', sid=s.id) }}"><button class="small">Keep</button></form> {% endif %}<form method="post" action="{{ url_for('story_remove', sid=s.id) }}"><button class="danger small">Remove</button></form>
+  <details style="margin-top:6px"><summary style="cursor:pointer;font-size:13px">Edit</summary>
+    <form method="post" action="{{ url_for('story_update', sid=s.id) }}" class="stack" style="margin:6px 0 0;display:flex">
+      <input type="text" name="text" value="{{ s.text }}" aria-label="story" style="width:100%">
+      <input type="text" name="tags" value="{{ s.tags|join(', ') }}" placeholder="tags, comma-separated" aria-label="tags" style="width:100%">
+      <div><button class="small">Save</button> <span class="hint" style="display:inline;margin:0">saving keeps it</span></div>
+    </form>
+  </details>
+</div>{% endfor %}
+{% if not state.stories %}<p class="hint" style="margin:0 0 6px">No stories yet. Add one below — or read a CV properly with the model and Presence drafts some for you to check.</p>{% endif %}
+<details style="margin-top:8px"><summary style="cursor:pointer">Add a story</summary>
+<form method="post" action="{{ url_for('story_add') }}" class="stack" style="margin-top:6px">
+  <label>What you did, in a sentence or two<textarea name="text" placeholder="e.g. Rebuilt the monthly reporting pack and cut the turnaround from 3 days to 1."></textarea></label>
+  <label>Tags (optional, comma-separated)<input type="text" name="tags" placeholder="e.g. reporting, Excel"></label>
+  <div><button>Add this story</button></div>
+</form>
+</details>
+</div>
+</aside>
+</div>
+<script>
+(function () {
+  document.querySelectorAll('form.cv-read').forEach(form => {
+    const status = form.querySelector('.read-status'), id = form.dataset.cv;
+    function watch() {
+      const t = setInterval(() => {
+        fetch('/cv/' + encodeURIComponent(id) + '/read/status').then(r => r.json()).then(s => {
+          if (!s.finished) { status.textContent = 'reading with ' + s.model + '…'; return; }
+          clearInterval(t);
+          status.textContent = s.error ? 'could not finish: ' + s.error : 'done' + (s.stories_added ? ' — ' + s.stories_added + ' stories drafted from it, keep the true ones' : '') + ' — reloading…';
+          if (!s.error) setTimeout(() => location.reload(), 700);
+        }).catch(() => {});
+      }, 2000);
+    }
+    form.addEventListener('submit', e => {
+      e.preventDefault(); status.textContent = 'starting…';
+      fetch(form.action + '?json=1', { method: 'POST' }).then(r => r.json()).then(s => { if (s.error && s.finished) status.textContent = s.error; else watch(); });
+    });
+    fetch('/cv/' + encodeURIComponent(id) + '/read/status').then(r => r.json()).then(s => { if (!s.finished) watch(); }).catch(() => {});
+  });
+})();
+</script>
+</section>
+
+<section class="step {{ 'done' if state.sources_done and state.filters_done else 'todo' }}"><h2>2 · Job boards<span class="need req">required</span></h2>
+<p class="dataflow">Presence asks these companies' careers pages for their public postings and keeps what it finds here <span class="where local" title="Kept on this computer. It leaves only if you send it somewhere yourself."><svg class="plant"><use href="#plant-local"/></svg>on this computer</span>. It only ever fetches; it sends nothing about you to any board.</p>
+
+<p class="hint">Presence reads company job boards through the interfaces those boards publish, never by scraping. Paste the link of a company's careers page; it works with pages on Greenhouse, Lever, Ashby, Workable and SmartRecruiters.</p>
+<form method="post" action="{{ url_for('sources_add') }}" class="stack">
+  <div class="row" style="align-items:flex-end">
+    <label style="flex:1 1 320px">Careers page link<input type="url" name="url" placeholder="https://boards.greenhouse.io/acme"></label>
+    <label>Company name (optional)<input type="text" name="label" placeholder="Acme"></label>
+    <button>Add board</button>
+  </div>
+  <details><summary>Advanced: choose the provider and board name yourself</summary>
+    <div class="row" style="align-items:flex-end">
+      <label>Provider<select name="provider">{% for c in catalog %}<option value="{{ c.provider }}">{{ c.name }}</option>{% endfor %}</select></label>
+      <label>Board name (the last part of the careers link)<input type="text" name="board" placeholder="acme"></label>
+    </div>
+  </details>
+</form>
+{% if state.sources %}<table style="margin-top:12px"><tr><th>Company</th><th>Board</th><th>State</th><th></th></tr>
+{% for s in state.sources %}<tr><td>{{ s.label }}</td><td class="mono">{{ s.provider }} · {{ s.config.board }}</td><td><span class="pill {{ 'on' if s.enabled else 'off' }}">{{ 'on' if s.enabled else 'off' }}</span></td>
+<td><form method="post" action="{{ url_for('sources_toggle', sid=s.id) }}" style="display:inline"><button class="quiet">{{ 'turn off' if s.enabled else 'turn on' }}</button></form>
+<form method="post" action="{{ url_for('sources_remove', sid=s.id) }}" style="display:inline"><button class="danger">remove</button></form></td></tr>{% endfor %}</table>
+{% else %}<p class="hint" style="margin-top:10px">No boards yet — Presence has nothing to read until you add one.</p>{% endif %}
+<p class="hint" style="margin-top:10px">Not available (their terms are under review): {% for c in catalog_hold %}{{ c.name }}{{ ', ' if not loop.last }}{% endfor %}. Planned: your own job-alert emails.</p>
+
+
+<h3>What to look for</h3>
+<p class="hint">Applied to every board. Save once even if you change nothing, so Presence knows you have looked.</p>
+<form method="post" action="{{ url_for('setup_filters') }}" class="stack">
+  <div class="row">
+    <label>Locations (comma-separated; empty = anywhere)<input type="text" name="locations" value="{{ state.filters.locations }}" placeholder="London, Remote"></label>
+    <label>Title must contain one of (empty = any)<input type="text" name="title_include" value="{{ state.filters.title_include }}" placeholder="analyst, graduate"></label>
+    <label>Title must not contain<input type="text" name="title_exclude" value="{{ state.filters.title_exclude }}"></label>
+    <label>Only roles posted in the last (days)<input type="number" name="freshness_days" value="{{ state.filters.freshness_days }}" min="1" max="90"></label>
+  </div>
+  <div><button>Save filters</button></div>
+</form>
+</section>
+
+<section class="step {{ 'done' if state.model_done else 'todo' }}"><h2>3 · Model<span class="need opt">recommended</span></h2>
+<p class="dataflow">The local engine runs on this computer <span class="where local" title="Kept on this computer. It leaves only if you send it somewhere yourself."><svg class="plant"><use href="#plant-local"/></svg>on this computer</span>: free, private, nothing leaves. With an API key instead, the text Presence needs judged, postings and your filters, goes to that company's service under your key <span class="where cloud" title="Handled by a company's service under your own key or account. They see what is sent."><svg class="plant"><use href="#plant-cloud"/></svg>through a service</span>; your CV goes to it only when you press "Read properly with the model" in step 1. Or point Presence at a server you run yourself <span class="where yours" title="Goes to a place that is yours: a server you run or rent, at the address you give."><svg class="plant"><use href="#plant-yours"/></svg>your own server</span>: the text goes there and nowhere else. Today the daily cycle uses your filters only; the model reads your CV properly and, later, judges postings.</p>
+<div class="optrow"><span class="where local" title="Runs on this computer."><svg class="plant"><use href="#plant-local"/></svg>Local engine</span> <span class="where cloud" title="Your text goes to Anthropic under your key."><svg class="plant"><use href="#plant-cloud"/></svg>Anthropic API</span> <span class="where cloud" title="Your text goes to OpenAI under your key."><svg class="plant"><use href="#plant-cloud"/></svg>OpenAI API</span> <span class="where yours" title="Your text goes to a server you run or rent, at the address you give."><svg class="plant"><use href="#plant-yours"/></svg>your own server</span></div>
+
+<div id="engine-block" {{ 'hidden' if state.model.kind != 'local' }}>
+<div id="ollama" class="row" style="align-items:center;gap:12px;margin-bottom:12px">
+  <span class="pill" id="ollama-pill">checking…</span>
+  <span id="ollama-text" class="hint" style="margin:0"></span>
+  <button type="button" id="engine-get" hidden>Get the local engine</button>
+  <form method="post" action="{{ url_for('ollama_start') }}" id="ollama-start" hidden><button class="quiet">Start Ollama</button></form>
+  <button type="button" class="quiet" id="engine-start" hidden>Start the local engine</button>
+</div>
+<p id="engine-progress" class="hint" hidden></p>
+<div id="ollama-model" class="row" style="align-items:flex-end;gap:12px;margin-bottom:12px" hidden>
+  <label>Model to pull<input type="text" id="pull-model" name="model" value=""></label>
+  <button type="button" class="quiet" id="pull-btn">Pull model</button>
+  <span id="pull-text" class="hint" style="margin:0"></span>
+  <form method="post" action="{{ url_for('ollama_check') }}" id="check-form"><input type="hidden" name="model" id="check-model"><button>Test and use this model</button></form>
+</div>
+<p id="models-hint" class="hint" hidden></p>
+</div>
+<script>
+(function () {
+  const pill = document.getElementById('ollama-pill'), text = document.getElementById('ollama-text');
+  const getBtn = document.getElementById('engine-get'), startSys = document.getElementById('ollama-start');
+  const startBtn = document.getElementById('engine-start'), progress = document.getElementById('engine-progress');
+  const modelRow = document.getElementById('ollama-model'), modelIn = document.getElementById('pull-model');
+  const checkModel = document.getElementById('check-model'), pullText = document.getElementById('pull-text');
+  const modelsHint = document.getElementById('models-hint');
+  let pollTimer = null, installing = false, autoStarted = false;
+  const mb = b => Math.round(b / 1048576);
+  function progressLine(d) {
+    if (d.phase === 'resolving') return 'Finding the latest local engine…';
+    if (d.phase === 'downloading') return 'Downloading the local engine · ' + mb(d.bytes_done) + ' of ' + (d.bytes_total ? mb(d.bytes_total) : '?') + ' MB';
+    if (d.phase === 'verifying') return 'Checking the download…';
+    if (d.phase === 'unpacking') return 'Unpacking…';
+    if (d.phase === 'starting') return 'Starting…';
+    if (d.phase === 'error') return 'Something went wrong: ' + d.error + ' — press the button to try again.';
+    return '';
+  }
+  function render(s) {
+    const e = s.engine || {};
+    getBtn.hidden = true; startSys.hidden = true; startBtn.hidden = true; modelRow.hidden = true;
+    getBtn.textContent = 'Get the local engine' + (e.asset_size_mb ? ' (' + e.asset_size_mb + ' MB)' : '');
+    if (e.models_dir) {
+      modelsHint.hidden = false;
+      modelsHint.textContent = 'Models are kept in ' + e.models_dir + (e.models_size_gb ? ' · ' + e.models_size_gb + ' GB so far.' : ' · nothing there yet.');
+    }
+    if (s.running) {
+      pill.textContent = (e.kind === 'system' ? 'Your Ollama is running' : 'Local engine running') + (s.version ? ' · ' + s.version : ''); pill.className = 'pill on';
+      text.textContent = (s.models.length ? 'installed models: ' + s.models.join(', ') + '. ' : 'no models yet. ')
+        + 'Recommended for ' + (s.ram_gb ? s.ram_gb + ' GB' : 'this machine') + ': ' + s.recommended + ' (' + s.recommended_size + ').';
+      modelRow.hidden = false; if (!modelIn.value) modelIn.value = s.models.includes(s.recommended) || !s.models.length ? s.recommended : s.models[0];
+      checkModel.value = modelIn.value; if (!installing) progress.hidden = true;
+    } else if (installing) {
+      pill.textContent = 'Getting the local engine'; pill.className = 'pill off'; text.textContent = '';
+    } else if (e.installed) {
+      pill.textContent = 'Local engine ready, not running'; pill.className = 'pill off';
+      text.textContent = 'starting it now…'; startBtn.hidden = false;
+      if (!autoStarted) { autoStarted = true; startEngine(); }
+    } else if (s.installed) {
+      pill.textContent = 'Ollama installed, not running'; pill.className = 'pill off'; startSys.hidden = false;
+      text.textContent = 'start it and this step continues by itself — or let Presence get its own engine.'; getBtn.hidden = false;
+    } else {
+      pill.textContent = 'No local engine yet'; pill.className = 'pill off';
+      text.textContent = e.supported ? 'one download, then models run here.' : 'no engine build for this computer — use an API key below.';
+      getBtn.hidden = !e.supported;
+    }
+  }
+  function poll() { fetch('{{ url_for('ollama_status') }}').then(r => r.json()).then(render).catch(() => {}); }
+  function startEngine() {
+    progress.hidden = false; progress.textContent = 'Starting…';
+    fetch('{{ url_for('ollama_start') }}?json=1', { method: 'POST' }).then(r => r.json()).then(j => { progress.textContent = j.message; poll(); }).catch(() => {});
+  }
+  function watchInstall() {
+    const t = setInterval(() => {
+      fetch('{{ url_for('ollama_engine_status') }}').then(r => r.json()).then(e => {
+        const d = e.download || {};
+        progress.hidden = false; progress.textContent = progressLine(d);
+        if (d.finished) { clearInterval(t); installing = false; if (d.phase === 'ready') progress.textContent = 'The local engine is running.'; poll(); }
+      }).catch(() => {});
+    }, 1000);
+  }
+  getBtn.addEventListener('click', () => {
+    installing = true; getBtn.hidden = true; startSys.hidden = true; progress.hidden = false; progress.textContent = 'Starting the download…';
+    fetch('{{ url_for('ollama_engine_install') }}', { method: 'POST' }).then(watchInstall).catch(() => { installing = false; });
+  });
+  startBtn.addEventListener('click', startEngine);
+  poll(); pollTimer = setInterval(poll, 4000);
+  modelIn.addEventListener('input', () => { checkModel.value = modelIn.value; });
+  document.getElementById('pull-btn').addEventListener('click', () => {
+    const model = modelIn.value.trim(); checkModel.value = model; pullText.textContent = 'starting…';
+    fetch('{{ url_for('ollama_pull') }}', { method: 'POST', body: new URLSearchParams({ model }) }).then(() => {
+      const t = setInterval(() => {
+        fetch('{{ url_for('ollama_pull_status') }}?model=' + encodeURIComponent(model)).then(r => r.json()).then(p => {
+          pullText.textContent = (p.error ? 'error: ' + p.error : p.status + (p.done_pct != null ? ' ' + p.done_pct + '%' : ''));
+          if (p.finished) { clearInterval(t); if (!p.error) pullText.textContent = 'pulled — now test it'; }
+        });
+      }, 2000);
+    });
+  });
+})();
+</script>
+<form method="post" action="{{ url_for('setup_model') }}">
+  <label>Provider<select name="kind" id="model-kind"><option value="local" {{ 'selected' if state.model.kind == 'local' }}>Local — on this machine</option><option value="endpoint" {{ 'selected' if state.model.kind == 'endpoint' }}>Your own server (vLLM, llama.cpp, LM Studio, and others)</option><option value="anthropic" {{ 'selected' if state.model.kind == 'anthropic' }}>Anthropic (API key)</option><option value="openai" {{ 'selected' if state.model.kind == 'openai' }}>OpenAI (API key)</option></select></label>
+  <label>Model name<input type="text" name="model" value="{{ state.model.model }}" placeholder="nemotron-3-nano:4b"></label>
+  <label>Server address (ends with /v1)<input type="url" name="base_url" value="{{ state.model.base_url }}" placeholder="http://localhost:8000/v1"></label>
+  <label>API key (if the service or server asks for one)<input type="password" name="api_key" placeholder="{{ 'saved' if state.model.has_key else 'sk-…' }}"></label>
+  <button>Save model</button>
+</form>
+<form method="post" action="{{ url_for('model_test') }}" class="row" style="align-items:center;gap:12px;margin-top:10px">
+  <button class="quiet">Test this model</button>
+  <span class="hint" style="margin:0">checks the model you saved: what its server can do, and what to change if it cannot.</span>
+</form>
+<script>
+(function () {
+  const kind = document.getElementById('model-kind'), engine = document.getElementById('engine-block');
+  function show() { engine.hidden = kind.value !== 'local'; }
+  kind.addEventListener('change', show); show();
+})();
+</script>
+</section>
+
+<section class="step {{ 'done' if state.tracker.backend == 'sqlite' or state.tracker.sheet_id else 'todo' }}"><h2>4 · Tracker<span class="need set">already set</span></h2>
+<p class="dataflow">Your applications are kept on this computer <span class="where local" title="Kept on this computer. It leaves only if you send it somewhere yourself."><svg class="plant"><use href="#plant-local"/></svg>on this computer</span> and shown on the Tracker page; nothing to do. Optionally, a mirror in a Google Sheet inside your own Drive <span class="where yours" title="Goes to a place that is yours: your phone, your own Google Drive."><svg class="plant"><use href="#plant-yours"/></svg>to a place you own</span>, where Presence can see only the one sheet it creates.</p>
+<div class="optrow"><span class="where local" title="SQLite file in your data folder."><svg class="plant"><use href="#plant-local"/></svg>Kept on this computer</span> <span class="where yours" title="A sheet in your own Google Drive; sign-in happens between your browser and Google."><svg class="plant"><use href="#plant-yours"/></svg>Also in a Google Sheet</span></div>
+
+<p class="hint">If you would rather work in a spreadsheet, Presence can also keep a Google Sheet in step with the tracker: it fills in Company, Role, Timeline and Link; you change <strong>Status</strong>, <strong>Next action</strong> and <strong>Notes</strong> in the sheet, and every sync brings your changes back. A row you add by hand becomes a tracked job.</p>
+<form method="post" action="{{ url_for('setup_tracker') }}" class="row" style="align-items:flex-end;gap:12px">
+  <label>Where your tracker lives<select name="backend"><option value="sqlite" {{ 'selected' if state.tracker.backend == 'sqlite' }}>Kept on this computer</option><option value="sheet" {{ 'selected' if state.tracker.backend == 'sheet' }}>Also in a Google Sheet</option></select></label>
+  <button>Save</button>
+</form>
+{% if state.tracker.backend == 'sheet' %}
+<h3>Google</h3>
+{% if state.google.kind == 'oauth' %}
+{% if state.google.needs_reconnect %}
+<p><span class="pill off">Google needs you to reconnect</span> <span class="hint" style="margin:0">Your sign-in has expired or was withdrawn. Nothing is lost — sign in again and syncing carries on.</span></p>
+<form method="post" action="{{ url_for('google_oauth_start') }}" style="display:inline"><button>Reconnect Google</button>{% if state.oauth_running %} <span class="pill off" id="oauth-pill">signing in…</span>{% endif %}</form>
+{% else %}
+<p><span class="pill on">signed in with Google</span>
+<form method="post" action="{{ url_for('google_disconnect') }}" style="display:inline"><button class="quiet">Disconnect</button></form></p>
+{% endif %}
+{% elif state.google.kind == 'service_account' %}
+<p><span class="pill on">service account · {{ state.google.email }}</span>
+<form method="post" action="{{ url_for('google_disconnect') }}" style="display:inline"><button class="quiet">Disconnect</button></form></p>
+{% elif state.google.builtin %}
+<p class="hint">Presence can only see the sheet it creates for you — nothing else in your Google Drive.</p>
+<form method="post" action="{{ url_for('google_oauth_start') }}"><button>Connect Google</button>{% if state.oauth_running %} <span class="pill off" id="oauth-pill">signing in…</span>{% endif %}</form>
+{% else %}
+<p class="hint">Google sign-in isn't included in this build.</p>
+<details><summary>Advanced</summary>
+<p class="hint">Two ways in for people who build Presence themselves. Either needs a Google Cloud project with the Google Sheets API and Google Drive API switched on.</p>
+<p><strong>Your own Google client.</strong> In the Google Cloud console create an OAuth client of type <em>Desktop app</em> and download its JSON file. Sign-in then works the same way as in the packaged app: Presence can only see the sheet it creates.</p>
+{% if not state.google.has_client %}
+<form method="post" action="{{ url_for('google_oauth_client') }}" enctype="multipart/form-data" class="row" style="align-items:flex-end;gap:12px"><label>Client file<input type="file" name="client" accept="application/json"></label><button class="quiet">Add client</button></form>
+{% else %}
+<form method="post" action="{{ url_for('google_oauth_start') }}"><button>Connect Google</button> <span class="pill off" id="oauth-pill">{{ 'signing in…' if state.oauth_running else 'client file ready' }}</span></form>
+{% endif %}
+<p><strong>A service account.</strong> No sign-in page; it works with any sheet you share with its email address. Console → IAM &amp; Admin → Service accounts → create one → Keys → Add key → JSON, then upload that key here.</p>
+<form method="post" action="{{ url_for('google_service_account') }}" enctype="multipart/form-data" class="row" style="align-items:flex-end;gap:12px"><label>Service-account key<input type="file" name="key" accept="application/json"></label><button class="quiet">Add key</button></form>
+</details>
+{% endif %}
+<h3>Your sheet</h3>
+{% if state.tracker.sheet_id %}
+<p><a href="{{ state.tracker.sheet_url }}" target="_blank" rel="noopener">Open your sheet</a>
+{% if state.sheet_last.at %}<span class="hint" style="margin:0"> · last sync {{ state.sheet_last.at|replace('T', ' ') }}: {{ state.sheet_last.pulled }} pulled, {{ state.sheet_last.pushed }} pushed{{ (', ' ~ state.sheet_last.issues|length ~ ' issue(s)') if state.sheet_last.issues else '' }}</span>{% else %}<span class="hint" style="margin:0"> · not synced yet</span>{% endif %}</p>
+<form method="post" action="{{ url_for('sheet_sync') }}" style="display:inline"><button>Sync now</button></form>
+<p class="hint">Sync also runs at the end of every cycle.</p>
+{% elif not state.google.kind %}
+<p class="hint">Sign in above first{{ "; your tracker sheet is made for you right after" if state.google.builtin }}.</p>
+{% elif state.google.kind == 'oauth' %}
+<form method="post" action="{{ url_for('sheet_create') }}">
+  <label>Sheet name<input type="text" name="title" value="Presence tracker"></label>
+  <button>Create my tracker sheet</button>
+</form>
+{% else %}
+<p class="hint">Google no longer lets a service account own a new sheet. Make a blank sheet in your own Drive, share it as editor with <span class="mono">{{ state.google.email }}</span>, then connect it here.</p>
+<form method="post" action="{{ url_for('sheet_connect') }}" class="row" style="align-items:flex-end;gap:12px">
+  <label>Blank sheet you made<input type="text" name="sheet" placeholder="sheet link or ID"></label>
+  <button>Connect</button>
+</form>
+{% endif %}
+<details><summary>Bring an existing tracker in</summary>
+<p class="hint">Rows from another spreadsheet (any columns: Company, Role, Link, Status, Applied, Location, Channel, Next action…) are added to the tracker once; duplicates are skipped and other columns are kept as extra fields.</p>
+{% if state.google.kind == 'service_account' %}
+<form method="post" action="{{ url_for('sheet_import') }}" class="row" style="align-items:flex-end;gap:12px"><label>Sheet to import (shared with the service account)<input type="text" name="sheet" placeholder="sheet link or ID"></label><button class="quiet">Import rows</button></form>
+{% else %}
+<p class="hint">In Google Sheets choose File → Download → Comma Separated Values, then pick that file here.</p>
+{% endif %}
+<form method="post" action="{{ url_for('tracker_import') }}" enctype="multipart/form-data" class="row" style="align-items:flex-end;gap:12px"><label>CSV file<input type="file" name="csv" accept=".csv,text/csv"></label><button class="quiet">Import rows</button></form>
+</details>
+{% if state.oauth_running %}
+<script>
+(function () {
+  const pill = document.getElementById('oauth-pill');
+  const t = setInterval(() => {
+    fetch('{{ url_for('google_oauth_status') }}').then(r => r.json()).then(s => {
+      if (s.error) { clearInterval(t); if (pill) pill.textContent = 'sign-in did not finish — try again'; }
+      else if (s.connected && !s.running) {
+        clearInterval(t);
+        if (s.sheet_id) { location.reload(); return; }
+        if (pill) pill.textContent = 'making your sheet…';
+        fetch('{{ url_for('google_oauth_finish') }}', {method: 'POST'}).finally(() => location.reload());
+      }
+    }).catch(() => {});
+  }, 3000);
+})();
+</script>
+{% endif %}
+{% endif %}
+
+</section>
+
+<section class="step {{ 'done' if state.telegram_paired else 'todo' }}"><h2>5 · Telegram bot<span class="need opt">optional</span></h2>
+<p class="dataflow">The daily brief goes to a bot that is yours alone, and from there to your phone through Telegram's servers <span class="where yours" title="Goes to a place that is yours: your phone, your own Google Drive."><svg class="plant"><use href="#plant-yours"/></svg>to a place you own</span>. Without it the brief simply shows on the Run page <span class="where local" title="Kept on this computer. It leaves only if you send it somewhere yourself."><svg class="plant"><use href="#plant-local"/></svg>on this computer</span>. Presence never reads your other chats.</p>
+
+<p class="hint">Three parts: create the bot once, pair it with your phone, send a test.</p>
+<details {{ '' if state.telegram_token else 'open' }}>
+<summary><strong>A · Create your bot with @BotFather</strong> (about two minutes, once)</summary>
+<div class="row" style="gap:18px;align-items:flex-start">
+<ol class="steps">
+  <li>Open Telegram and find <a href="https://t.me/BotFather" target="_blank" rel="noopener">@BotFather</a>: on a phone, scan the code on the right, or tap the link on this device.</li>
+  <li>Press <strong>Start</strong>, then send <code>/newbot</code>.</li>
+  <li>Give it a display name, for example <em>Presence</em>.</li>
+  <li>Give it a username ending in <code>bot</code>, for example <code>ada_presence_bot</code>. It must be unused.</li>
+  <li>BotFather replies with a token that looks like <code>123456789:AAH…</code>. Copy it. On a phone, press and hold the token to copy; if Telegram is on this computer (Telegram Desktop or web.telegram.org) copy and paste directly.</li>
+  <li>Paste it below and press <strong>Save token</strong>. Presence checks the token with Telegram before storing it.</li>
+</ol>
+<figure class="qr"><img src="{{ state.botfather_qr }}" alt="QR code opening @BotFather" width="132" height="132"><figcaption>opens @BotFather</figcaption></figure>
+</div>
+<p class="hint">The token is kept on this computer, readable only by you. Treat it like a password. If it ever leaks, send <code>/revoke</code> to BotFather and save the new one here.</p>
+</details>
+<form method="post" action="{{ url_for('setup_telegram') }}">
+  <label>Bot token<input type="password" name="token" placeholder="{{ 'saved · @' + state.bot.username if state.bot.username else '123456789:AAH…' }}"></label>
+  <button name="action" value="save">Save token</button>
+  {% if state.telegram_paired %}<span class="pill on">paired · {{ state.bot.paired_name or ('chat ' ~ state.chat_id) }}</span>
+  <button name="action" value="test" class="quiet">Send a test message</button>{% endif %}
+</form>
+{% if state.telegram_token and not state.telegram_paired %}
+<h3>B · Pair it with your phone</h3>
+<div class="row" style="gap:18px;align-items:flex-start">
+<figure class="qr"><img src="{{ state.pair_qr }}" alt="QR code to pair your bot" width="164" height="164"><figcaption>scan with your phone camera</figcaption></figure>
+<div>
+  <p>Scan the code with your phone's camera, or <a href="{{ state.pair_link }}" target="_blank" rel="noopener">open the pairing link</a> on a device where Telegram is signed in. Telegram opens <strong>@{{ state.bot.username }}</strong>. Press <strong>Start</strong>.</p>
+  <p><span class="pill off" id="pair-pill">waiting for Start…</span> <span class="hint" id="pair-text" style="margin:0">the code in the link tells Presence it is you, so nobody else can pair with this bot by chance.</span></p>
+  <form method="post" action="{{ url_for('setup_telegram') }}" class="hint">No camera and no link? Send the bot any message, then <button name="action" value="pair" class="quiet">Pair with the latest message</button></form>
+</div>
+</div>
+<script>
+(function () {
+  const pill = document.getElementById('pair-pill'), text = document.getElementById('pair-text');
+  const t = setInterval(() => {
+    fetch('{{ url_for('telegram_pair_status') }}').then(r => r.json()).then(s => {
+      if (s.paired) { clearInterval(t); pill.textContent = 'paired with ' + (s.name || ('chat ' + s.chat_id)); pill.className = 'pill on';
+        text.textContent = 'done — reloading…'; setTimeout(() => location.reload(), 900); }
+      else if (s.reason) { text.textContent = s.reason; }
+    }).catch(() => {});
+  }, 3000);
+})();
+</script>
+{% endif %}
+
+</section>
+{% endblock %}

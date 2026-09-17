@@ -1,0 +1,156 @@
+{% extends "base.html" %}{% block content %}
+{% set busy = state if state and not state.finished else None %}
+{% set failed = state.error if state and state.finished and state.error else None %}
+<p class="crumb"><a href="{{ url_for('tracker_page') }}">← back to the tracker</a></p>
+<h1>Prepare a message</h1>
+<div class="jobline">
+  <span class="who"><strong>{{ job.company }}</strong> · {{ job.title }}</span>
+  <span class="pill on">{{ job.status.replace('_', ' ') }}</span>
+  {% if ctx.timeline %}<span class="mono">{{ ctx.timeline }}</span>{% endif %}
+  <span class="tag">{% if ctx.cv_label %}CV: {{ ctx.cv_label }}{% else %}no CV yet{% endif %}</span>
+  {% if model.kind == 'local' %}<span class="where local" title="The questions and the draft are made on this computer. Nothing leaves it."><svg class="plant"><use href="#plant-local"/></svg>on this computer</span>{% else %}<span class="where cloud" title="What you type here goes to {{ provider }} under your key, to be answered. Nothing is sent to the company."><svg class="plant"><use href="#plant-cloud"/></svg>through a service — {{ provider }}</span>{% endif %}
+</div>
+{% if first_time %}<p class="dataflow">Nothing here is sent. Presence asks, you answer, it writes from your words.</p>{% endif %}
+
+<section class="step">
+<h2>What Presence has</h2>
+<div class="have">
+ <div class="block">
+  <h3>The job description</h3>
+  {% if ctx.description %}
+   <details><summary>{{ ctx.description|length }} characters — read it</summary><pre class="brief">{{ ctx.description }}</pre></details>
+   <details><summary>Replace it</summary>
+    <form method="post" action="{{ url_for('session_jd', job_id=job.id) }}" class="stack"><textarea name="text" placeholder="Paste the job description here"></textarea><div><button class="quiet small">Save</button></div></form>
+   </details>
+  {% else %}
+   <form method="post" action="{{ url_for('session_jd', job_id=job.id) }}" class="stack"><textarea name="text" placeholder="Paste the job description here"></textarea><div><button>Save</button></div></form>
+   <p class="hint">Presence keeps it with this job; the questions grow from it.</p>
+  {% endif %}
+ </div>
+ <div class="block">
+  <h3>About the company</h3>
+  {% for n in notes %}<div class="note"><div class="txt">{% if n.title %}<strong>{{ n.title }}</strong> · {% endif %}{{ n.text }}</div><form method="post" action="{{ url_for('session_company_remove', job_id=job.id, n=n.n) }}"><button class="link">remove</button></form></div>{% endfor %}
+  <form method="post" action="{{ url_for('session_company_add', job_id=job.id) }}" class="stack"><input type="text" name="title" placeholder="What it is (optional)"><textarea name="text" placeholder="Paste anything you read about them — a page, a post, a product note"></textarea><div><button class="quiet small">Keep</button></div></form>
+  <p class="hint">Presence never fetches a company page itself. What you paste here is all it knows about them.</p>
+ </div>
+ <div class="block">
+  <h3>The CV</h3>
+  {% if ctx.cv_label %}<p>{{ ctx.cv_label }}{% if job.extra.cv %} — the one you applied with{% else %} — your default{% endif %}. {% if ctx.cv_facts %}Presence read {{ ctx.cv_facts|length }} lines from it and asks past them.{% else %}Not read properly yet: press "Read properly with the model" in Setup, step 1, and Presence will know what to ask past.{% endif %}</p>
+  {% else %}<p class="hint">Add your CV in Setup, step 1.</p>{% endif %}
+ </div>
+ <div class="block">
+  <h3>Your stories</h3>
+  {% if bank %}<div class="storychips">{% for s in bank %}{% set v = 'use' if s.id in sess.stories.use else ('skip' if s.id in sess.stories.skip else '') %}<div class="story {{ v }}"><span class="txt">{{ s.text }}</span><form method="post" action="{{ url_for('session_stories', job_id=job.id) }}"><input type="hidden" name="id" value="{{ s.id }}">{% if v != 'use' %}<button class="small" name="verdict" value="use">Use</button>{% endif %}{% if v != 'skip' %}<button class="quiet small" name="verdict" value="skip">Skip</button>{% endif %}</form></div>{% endfor %}</div>
+  <p class="hint">Confirmed stories from your bank. A skipped one stays out of this message.</p>
+  {% else %}<p class="hint">Nothing in your bank yet. Any answer you give below can be saved to it.</p>{% endif %}
+ </div>
+</div>
+</section>
+
+<section class="step">
+<h2>The conversation</h2>
+{% for t in sess.transcript %}{% if t.answer or t.skipped %}
+<div class="qa"><div class="q">{{ t.n }}. {{ t.question }}</div>
+<div class="a">{% if t.skipped %}<em>skipped</em>{% else %}{{ t.answer }} <form method="post" action="{{ url_for('session_story', job_id=job.id) }}" class="inline"><input type="hidden" name="answer" value="{{ t.n }}"><button class="link">Save this to my stories</button></form>{% endif %}</div></div>
+{% endif %}{% endfor %}
+{% if busy and busy.what != 'draft' %}
+ <p class="live" id="turn-status">thinking of a question with {{ busy.model }}…</p>
+{% elif pending %}
+ <div class="ask">
+  <p class="q">{{ pending.question }}</p>
+  {% if pending.why %}<p class="why">{{ pending.why }}</p>{% endif %}
+  <form method="post" action="{{ url_for('session_answer', job_id=job.id) }}" class="stack"><textarea name="answer" autofocus placeholder="In your own words. Short is fine."></textarea><div class="row"><button>Answer</button><button class="quiet" name="skip" value="1">Skip</button></div></form>
+ </div>
+{% elif sess.stopped %}
+ <p>Presence has enough for a message. Pick a channel below, or ask for one more question.</p>
+{% elif not sess.transcript %}
+ <p class="hint">Presence asks one question at a time, in plain words. Skip any; stop when you like.</p>
+{% endif %}
+<div class="row">
+ {% if not busy and not pending and not sess.stopped %}<form method="post" action="{{ url_for('session_ask', job_id=job.id) }}"><button>{{ 'Ask me a question' if not sess.transcript else 'Next question' }}</button></form>{% endif %}
+ {% if not busy and pending %}<form method="post" action="{{ url_for('session_enough', job_id=job.id) }}"><button class="quiet">That's enough</button></form>{% endif %}
+ {% if not busy and sess.stopped %}<form method="post" action="{{ url_for('session_more', job_id=job.id) }}"><button class="quiet">Ask me more</button></form>{% endif %}
+</div>
+{% if failed and state.what != 'draft' %}<p class="live error" id="turn-status">{{ failed }}</p>{% endif %}
+{% if sess.angles %}
+<h3>Angles</h3>
+<div class="angles">{% for a in sess.angles %}
+<div class="angle {{ a.verdict }}">
+ <div class="txt">{{ a.final or a.text }}</div>
+ <div class="from">from {{ labels.get(a['from'], a['from']) }}</div>
+ {% if not a.verdict %}
+  <div class="row">
+   <form method="post" action="{{ url_for('session_angle', job_id=job.id, n=a.n) }}"><input type="hidden" name="verdict" value="accept"><button class="small">Use</button></form>
+   <form method="post" action="{{ url_for('session_angle', job_id=job.id, n=a.n) }}"><input type="hidden" name="verdict" value="reject"><button class="quiet small">Not this</button></form>
+   <details><summary>Edit</summary><form method="post" action="{{ url_for('session_angle', job_id=job.id, n=a.n) }}" class="stack"><input type="hidden" name="verdict" value="edit"><textarea name="text">{{ a.text }}</textarea><div><button class="small">Use my wording</button></div></form></details>
+  </div>
+ {% else %}
+  <span class="pill {{ 'on' if a.verdict != 'rejected' else 'off' }}">{{ {'accepted': 'in', 'edited': 'in, your words', 'rejected': 'out'}[a.verdict] }}</span>
+  {% if a.verdict != 'rejected' %}<form method="post" action="{{ url_for('session_story', job_id=job.id) }}" class="inline"><input type="hidden" name="angle" value="{{ a.n }}"><button class="link">Save this to my stories</button></form>{% endif %}
+ {% endif %}
+</div>{% endfor %}</div>
+{% endif %}
+</section>
+
+<section class="step">
+<h2>The message</h2>
+<form method="post" action="{{ url_for('session_draft', job_id=job.id) }}" id="draft-form">
+ <label>Channel<select name="channel">{% for k, c in channels.items() %}<option value="{{ k }}" {{ 'selected' if draft and draft.channel == k }}>{{ c.label }}</option>{% endfor %}</select></label>
+ <label>Tone<select name="tone">{% for k, t in tones.items() %}<option value="{{ k }}" {{ 'selected' if sess.tone == k }}>{{ t }}</option>{% endfor %}</select></label>
+ <button>Write</button>
+ <span class="live" id="draft-status">{% if busy and busy.what == 'draft' %}writing with {{ busy.model }}…{% elif failed and state.what == 'draft' %}{{ failed }}{% endif %}</span>
+</form>
+<p class="hint">Email 90–140 words · LinkedIn message under 600 characters · connection note under 280. Presence writes only from your answers, the angles you kept, your confirmed stories and profile, and the description; a line it cannot trace to one of those is dropped.</p>
+{% if draft %}
+<div class="draftwrap">
+ <div class="draftbox">
+  <div class="tag">{{ channels[draft.channel].label }} · {{ draft.tone }} · {{ draft.at[:16].replace('T', ' ') }}</div>
+  <textarea id="draft-text" class="draft">{{ draft.draft }}</textarea>
+  <div class="row">
+   <button type="button" class="quiet" id="copy">Copy</button>
+   <form method="post" action="{{ url_for('session_sent', job_id=job.id) }}"><button class="quiet">Mark as sent</button></form>
+  </div>
+  {% if draft.issues %}<ul class="issues">{% for i in draft.issues %}<li>{{ i }}</li>{% endfor %}</ul>{% endif %}
+  <p class="hint">Edit it here, copy it, and send it yourself. Presence never sends anything.</p>
+ </div>
+ <aside class="whypanel">
+  <h3>Why each line</h3>
+  {% for s in draft.sources %}<div class="why-row"><div class="sentence">{{ s.sentence }}</div><div class="source">{{ labels.get(s.source, s.source) }}</div></div>{% else %}<p class="hint">Nothing was kept — answer a question or two, then write again.</p>{% endfor %}
+ </aside>
+</div>
+{% endif %}
+</section>
+<script>
+(function () {
+  const statusUrl = '{{ url_for("session_status", job_id=job.id) }}';
+  function watch(el, doing) {
+    if (!el) return;
+    const t = setInterval(() => {
+      fetch(statusUrl).then(r => r.json()).then(s => {
+        if (!s.finished) { el.textContent = doing + ' with ' + s.model + '…'; return; }
+        clearInterval(t);
+        el.textContent = s.error ? 'could not finish: ' + s.error : 'done — reloading…';
+        if (!s.error) setTimeout(() => location.reload(), 500);
+      }).catch(() => {});
+    }, 1500);
+  }
+  const draftForm = document.getElementById('draft-form');
+  const draftStatus = document.getElementById('draft-status');
+  draftForm.addEventListener('submit', e => {
+    e.preventDefault(); draftStatus.textContent = 'starting…';
+    fetch(draftForm.action + '?json=1', { method: 'POST', body: new FormData(draftForm) })
+      .then(r => r.json())
+      .then(s => { if (s.error && s.finished) draftStatus.textContent = s.error; else watch(draftStatus, 'writing'); })
+      .catch(() => { draftStatus.textContent = 'could not start'; });
+  });
+  {% if busy %}watch(document.getElementById('{{ "draft-status" if busy.what == "draft" else "turn-status" }}'), '{{ "writing" if busy.what == "draft" else "thinking of a question" }}');{% endif %}
+  const copy = document.getElementById('copy');
+  if (copy) copy.addEventListener('click', () => {
+    const box = document.getElementById('draft-text');
+    const done = () => { copy.textContent = 'copied'; setTimeout(() => { copy.textContent = 'Copy'; }, 1500); };
+    if (navigator.clipboard) navigator.clipboard.writeText(box.value).then(done).catch(() => {});
+    else { box.select(); document.execCommand('copy'); done(); }
+  });
+})();
+</script>
+{% endblock %}

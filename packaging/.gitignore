@@ -1,0 +1,4 @@
+# PyInstaller work and output folders (the root .gitignore covers build/ and dist/ too)
+build/
+dist/
+*.iconset/

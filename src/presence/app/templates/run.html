@@ -1,0 +1,16 @@
+{% extends "base.html" %}{% block content %}
+<h1>Run a cycle</h1>
+<p class="lede">Presence reads every company board you turned on, applies your filters, updates the tracker and writes the brief. Nothing is ever sent on your behalf.</p>
+<ul class="checks">
+{% for c in checks %}<li class="{{ 'ok' if c.ok else 'missing' }}"><span class="mark" aria-hidden="true">{{ '✓' if c.ok else '·' }}</span> {{ c.label }}{% if not c.ok %} <span class="hint" style="margin:0;display:inline">— {{ c.hint }}</span>{% endif %}{% if not c.required and not c.ok %} <span class="tag">optional</span>{% endif %}</li>
+{% endfor %}</ul>
+<form method="post" action="{{ url_for('run_now') }}">
+  <button {{ 'disabled' if blocker }} title="{{ blocker }}">Run now</button>
+  <button name="send" value="1" class="quiet" {{ 'disabled' if blocker or not telegram_paired }} title="{{ blocker if blocker else ('pair Telegram in Setup, step 5' if not telegram_paired else '') }}">Run and send to Telegram</button>
+  {% if blocker %}<span class="hint" style="margin:0">{{ blocker }}</span>{% elif not telegram_paired %}<span class="hint" style="margin:0">to send the brief to your phone, pair Telegram in Setup, step 5</span>{% endif %}
+</form>
+<p class="hint" style="margin-top:12px">Next automatic run: {{ next_run }}.</p>
+{% if brief %}<h2 style="margin-top:20px">Latest brief</h2><pre class="brief">{{ brief }}</pre>{% endif %}
+{% if errors %}<h3>Boards that could not be read</h3><div class="log">{% for k, v in errors.items() %}{{ k }}: {{ v }}
+{% endfor %}</div>{% endif %}
+{% endblock %}

@@ -1,0 +1,101 @@
+name: release
+
+# Builds Presence.app (macOS, Apple silicon) into a .dmg on every v* tag and on
+# demand. Signing and notarization run only when the Apple secrets exist;
+# without them the job still produces an unsigned .dmg (see packaging/macos/README.md).
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  macos-app:
+    runs-on: macos-15
+    env:
+      # Secrets cannot be read inside `if:`; mirror them into env so steps can
+      # skip cleanly when they are absent. All optional.
+      MACOS_CERT_P12_BASE64: ${{ secrets.MACOS_CERT_P12_BASE64 }}
+      MACOS_CERT_PASSWORD: ${{ secrets.MACOS_CERT_PASSWORD }}
+      APPLE_ID: ${{ secrets.APPLE_ID }}
+      APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+      APPLE_APP_PASSWORD: ${{ secrets.APPLE_APP_PASSWORD }}
+      PRESENCE_GOOGLE_CLIENT_ID: ${{ secrets.PRESENCE_GOOGLE_CLIENT_ID }}
+      PRESENCE_GOOGLE_CLIENT_SECRET: ${{ secrets.PRESENCE_GOOGLE_CLIENT_SECRET }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: astral-sh/setup-uv@v5
+        with:
+          python-version: "3.12"
+
+      - name: Tag must match the package version
+        if: startsWith(github.ref, 'refs/tags/v')
+        run: |
+          v="$(python3 -c 'import re;print(re.search(r"__version__ = \"([^\"]+)\"", open("src/presence/__init__.py").read()).group(1))')"
+          [ "refs/tags/v$v" = "$GITHUB_REF" ] || { echo "tag $GITHUB_REF but package version is $v"; exit 1; }
+
+      - name: Sync dependencies (with the macapp group)
+        run: uv sync --group macapp
+
+      # Google OAuth client for the "connect a Google Sheet" step. The file
+      # src/presence/adapters/google_client.py (added by another branch) holds
+      # empty placeholders; a release build fills them from repository secrets
+      # so users never paste client ids. Skipped when the secret is absent or
+      # the file does not exist yet.
+      - name: Inject Google OAuth client id/secret
+        if: env.PRESENCE_GOOGLE_CLIENT_ID != ''
+        run: python3 scripts/inject_google_client.py
+
+      - name: Import Developer ID certificate (optional)
+        if: env.MACOS_CERT_P12_BASE64 != ''
+        run: |
+          CERT="$RUNNER_TEMP/cert.p12"; KC="$RUNNER_TEMP/signing.keychain-db"; KCPW="$(uuidgen)"
+          echo -n "$MACOS_CERT_P12_BASE64" | base64 --decode -o "$CERT"
+          security create-keychain -p "$KCPW" "$KC"
+          security set-keychain-settings -lut 21600 "$KC"
+          security unlock-keychain -p "$KCPW" "$KC"
+          security import "$CERT" -P "$MACOS_CERT_PASSWORD" -A -t cert -f pkcs12 -k "$KC"
+          security set-key-partition-list -S apple-tool:,apple: -k "$KCPW" "$KC"
+          security list-keychain -d user -s "$KC"
+          rm -f "$CERT"
+          IDENTITY="$(security find-identity -v -p codesigning "$KC" | grep 'Developer ID Application' | head -1 | sed -E 's/.*"(.+)".*/\1/')"
+          [ -n "$IDENTITY" ] || { echo "no Developer ID Application identity in the .p12"; exit 1; }
+          echo "CODESIGN_IDENTITY=$IDENTITY" >> "$GITHUB_ENV"
+
+      # Builds the .app (signed with hardened runtime when CODESIGN_IDENTITY is
+      # set), runs the PRESENCE_SMOKE=1 self-test of the frozen binary, then
+      # makes dist/Presence-<version>-arm64.dmg.
+      - name: Build app and dmg
+        run: SKIP_SYNC=1 scripts/build_mac.sh
+
+      - name: Notarize and staple (optional)
+        if: env.MACOS_CERT_P12_BASE64 != '' && env.APPLE_ID != ''
+        run: |
+          DMG="$(ls dist/Presence-*-arm64.dmg)"
+          codesign --force --timestamp --sign "$CODESIGN_IDENTITY" "$DMG"
+          xcrun notarytool submit "$DMG" --apple-id "$APPLE_ID" --team-id "$APPLE_TEAM_ID" \
+            --password "$APPLE_APP_PASSWORD" --wait
+          xcrun stapler staple "$DMG"
+          xcrun stapler staple dist/Presence.app
+          spctl --assess --type execute -vv dist/Presence.app
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: Presence-macOS-arm64
+          path: dist/Presence-*-arm64.dmg
+          if-no-files-found: error
+
+      - name: Attach to GitHub release
+        if: startsWith(github.ref, 'refs/tags/v')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: dist/Presence-*-arm64.dmg
+          generate_release_notes: true
+
+      - name: Remove signing keychain
+        if: always()
+        run: security delete-keychain "$RUNNER_TEMP/signing.keychain-db" 2>/dev/null || true

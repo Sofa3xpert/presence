@@ -1,0 +1,21 @@
+{% extends "base.html" %}{% block content %}
+<h1>Tracker</h1>
+<p class="lede">{{ jobs|length }} role{{ '' if jobs|length == 1 else 's' }}{{ ' with status ' + status if status else '' }} · stored on this computer</p>
+<div class="row" style="gap:18px;align-items:flex-end">
+<form method="get" action="{{ url_for('tracker_page') }}"><label>Status<select name="status" onchange="this.form.submit()"><option value="">all</option>{% for s in statuses %}<option value="{{ s }}" {{ 'selected' if s == status }}>{{ s }}</option>{% endfor %}</select></label></form>
+<form method="post" action="{{ url_for('tracker_import') }}" enctype="multipart/form-data"><label>Import a CSV export<input type="file" name="csv" accept=".csv,text/csv" onchange="this.form.submit()"></label></form>
+</div>
+<div class="split">
+<div class="main">
+<table style="margin-top:12px"><tr><th>Company</th><th>Role</th><th>Location</th><th>Status</th><th>Timeline</th><th>CV</th><th>Source</th><th>Act</th></tr>
+{% for j in jobs %}<tr><td>{{ j.company }}</td><td><a href="{{ j.url }}" target="_blank" rel="noopener">{{ j.title }}</a></td><td>{{ j.location }}</td><td><span class="pill on">{{ j.status }}</span></td><td class="mono">{{ timelines[j.id] }}</td><td>{{ j.extra.cv_label or "" }}</td><td class="mono">{{ j.source }}</td>
+<td><form method="post" action="{{ url_for('tracker_event', job_id=j.id) }}"><select name="kind"><option value="applied">applied</option><option value="assessment">assessment</option><option value="interview">interview</option><option value="interview_done">interview done</option><option value="messaged">messaged</option><option value="rejected">rejected</option><option value="ignored">ignore</option></select>{% if cvs %}<select name="cv" title="which CV you applied with">{% for c in cvs %}<option value="{{ c.id }}" {{ 'selected' if c.id == cv_default }}>{{ c.label }}</option>{% endfor %}</select>{% endif %}<button class="quiet">record</button></form><a class="prep" href="{{ url_for('session_page', job_id=j.id) }}">Prepare a message</a></td></tr>{% endfor %}
+</table>
+</div>
+<aside class="cvbox">
+<h3>Your CVs</h3>
+{% if cvs %}{% for c in cvs %}<div class="cvcard"><a class="thumb" href="{{ url_for('cv_file', cv_id=c.id) }}" target="_blank" rel="noopener">{% if c.has_preview %}<img src="{{ url_for('cv_preview', cv_id=c.id) }}" alt="">{% else %}<div class="txt">{{ c.label }}</div>{% endif %}</a><div class="body"><div class="name">{{ c.label }}{% if c.is_default %} <span class="pill on">default</span>{% endif %}</div><div class="meta">{% set n = jobs|selectattr('extra.cv', 'equalto', c.id)|list|length %}{{ n }} application{{ '' if n == 1 else 's' }} with this one</div></div></div>{% endfor %}{% else %}<p class="hint" style="margin:0">Add your CV in Setup, step 1.</p>{% endif %}
+<p class="hint" style="margin:8px 0 0">When you record "applied", pick the CV you sent; it is remembered on the row.</p>
+</aside>
+</div>
+{% endblock %}

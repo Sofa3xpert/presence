@@ -1,0 +1,19 @@
+{% extends "base.html" %}{% block content %}
+<h1>Sorry</h1>
+<p class="lede">{{ sentence }} Nothing was sent anywhere; your data is untouched.</p>
+{% if broken %}<p>The file <strong>{{ broken }}</strong> in your data folder can no longer be read. If you edited it by hand, undo that change; otherwise move it out of the folder and Presence writes a fresh one the next time you save that step.</p>{% endif %}
+<p><a href="{{ url_for('setup') }}"><button type="button">Back to setup</button></a>
+<form method="post" action="{{ url_for('data_open') }}" style="display:inline"><input type="hidden" name="back" value="{{ request.path }}"><button class="quiet">Open data folder</button></form></p>
+<h2 style="margin-top:20px">Details <button type="button" class="quiet small" id="copy">Copy details</button></h2>
+<pre class="log" id="details">{{ details }}</pre>
+<p class="hint">If you ask for help, paste these details — they say what happened, not who you are.</p>
+<script>
+document.getElementById('copy').addEventListener('click', function () {
+  var t = document.getElementById('details').textContent, b = this;
+  (navigator.clipboard ? navigator.clipboard.writeText(t) : Promise.reject()).then(function () { b.textContent = 'Copied'; }, function () {
+    var r = document.createRange(); r.selectNodeContents(document.getElementById('details'));
+    var s = window.getSelection(); s.removeAllRanges(); s.addRange(r); b.textContent = 'Selected — press copy';
+  });
+});
+</script>
+{% endblock %}

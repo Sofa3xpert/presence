@@ -1,0 +1,20 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><title>Presence</title>
+<link rel="icon" href="{{ url_for('static', filename='favicon.svg') }}" type="image/svg+xml">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}"></head>
+<body>
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <symbol id="plant-local" viewBox="0 0 24 24"><path d="M4 20h16" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/><path d="M12 20v-8" stroke="#2f6b4f" stroke-width="1.8" stroke-linecap="round"/><path d="M12 13c0-4 3-6.5 7.5-6.5 0 4.5-3 6.5-7.5 6.5z" fill="#2f6b4f"/><path d="M12 15.5c0-3-2.5-5-6.5-5 0 3 2.5 5 6.5 5z" fill="#9bc53d"/></symbol>
+  <symbol id="plant-yours" viewBox="0 0 24 24"><path d="M7.5 13h9l-1 8h-7z" fill="#b08968"/><path d="M6.5 12.5h11" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/><path d="M12 12.5V7" stroke="#2f6b4f" stroke-width="1.7" stroke-linecap="round"/><path d="M12 8c0-3.2 2.5-5.2 6.2-5.2 0 3.2-2.5 5.2-6.2 5.2z" fill="#2f6b4f"/><path d="M12 10.5c0-2.6-2-4.3-5.3-4.3 0 2.6 2 4.3 5.3 4.3z" fill="#9bc53d"/></symbol>
+  <symbol id="plant-cloud" viewBox="0 0 24 24"><path d="M3 11l9-7 9 7v9.5H3z" fill="none" stroke="#e0a24a" stroke-width="1.7" stroke-linejoin="round"/><path d="M3 11h18M12 4v16.5M7.5 7.5v13M16.5 7.5v13" stroke="#e0a24a" stroke-width=".9" opacity=".65"/><path d="M12 20.5v-4.5" stroke="#2f6b4f" stroke-width="1.6" stroke-linecap="round"/><path d="M12 17c0-2.2 1.7-3.5 4-3.5 0 2.2-1.7 3.5-4 3.5z" fill="#9bc53d"/></symbol>
+</svg>
+<header>
+  <div class="brand"><svg width="30" height="30" viewBox="0 0 84 84" aria-hidden="true"><path d="M22 14 H12 V70 H22" fill="none" stroke="#2a2622" stroke-width="5" stroke-linecap="square"></path><path d="M62 14 H72 V70 H62" fill="none" stroke="#2a2622" stroke-width="5" stroke-linecap="square"></path><path d="M42 66 V38" stroke="#2f6b4f" stroke-width="5" stroke-linecap="round" fill="none"></path><path d="M42 42 C42 30 52 26 60 28 C60 40 50 44 42 42 Z" fill="#2f6b4f"></path><path d="M42 48 C40 40 32 38 26 40 C28 48 36 50 42 48 Z" fill="#9bc53d"></path></svg>presence</div>
+  <nav><a href="{{ url_for('setup') }}" class="{{ 'active' if page == 'setup' else '' }}">Setup</a><a href="{{ url_for('tracker_page') }}" class="{{ 'active' if page == 'tracker' else '' }}">Tracker</a><a href="{{ url_for('run_page') }}" class="{{ 'active' if page == 'run' else '' }}">Run</a></nav>
+  <form method="post" action="{{ url_for('data_open') }}" class="folder" title="{{ data_dir }}"><input type="hidden" name="back" value="{{ request.path }}"><span class="tag">stored on this computer</span> <button class="link">Open data folder</button></form>
+</header>
+<main>
+{% with messages = get_flashed_messages(with_categories=true) %}{% for cat, m in messages %}<div class="flash {{ cat }}">{{ m }}</div>{% endfor %}{% endwith %}
+{% block content %}{% endblock %}
+</main></body></html>

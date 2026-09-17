@@ -1,0 +1,9 @@
+services:
+  presence:
+    build: .
+    # Per the charter, everything personal lives in this mounted directory —
+    # profile, tracker, secrets. Nothing is baked into the image.
+    volumes:
+      - ./data:/data
+    environment:
+      PRESENCE_DATA_DIR: /data

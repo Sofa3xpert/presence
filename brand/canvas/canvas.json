@@ -1,0 +1,99 @@
+{
+  "pages": [
+    {
+      "id": "page-1",
+      "name": "Brand"
+    },
+    {
+      "id": "page-2",
+      "name": "Directions explored"
+    }
+  ],
+  "artboards": [
+    {
+      "file": "Main.dc.html",
+      "x": 0,
+      "y": 0,
+      "w": 640,
+      "h": 960,
+      "title": "Presence \u00b7 chosen direction (E + B)",
+      "page": "page-1"
+    },
+    {
+      "file": "Brief.dc.html",
+      "x": 740,
+      "y": 0,
+      "w": 520,
+      "h": 620,
+      "title": "Brand brief",
+      "page": "page-1"
+    },
+    {
+      "file": "DirectionA.dc.html",
+      "x": 0,
+      "y": 0,
+      "w": 640,
+      "h": 960,
+      "title": "Direction A \u00b7 Quiet companion",
+      "page": "page-2"
+    },
+    {
+      "file": "DirectionB.dc.html",
+      "x": 740,
+      "y": 0,
+      "w": 640,
+      "h": 960,
+      "title": "Direction B \u00b7 Shows its work",
+      "page": "page-2"
+    },
+    {
+      "file": "DirectionC.dc.html",
+      "x": 1480,
+      "y": 0,
+      "w": 640,
+      "h": 960,
+      "title": "Direction C \u00b7 Steady light",
+      "page": "page-2"
+    },
+    {
+      "file": "DirectionD.dc.html",
+      "x": 0,
+      "y": 1100,
+      "w": 640,
+      "h": 960,
+      "title": "Direction D \u00b7 Paper and pencil",
+      "page": "page-2"
+    },
+    {
+      "file": "DirectionE.dc.html",
+      "x": 740,
+      "y": 1100,
+      "w": 640,
+      "h": 960,
+      "title": "Direction E \u00b7 Kept garden",
+      "page": "page-2"
+    }
+  ],
+  "annotations": [
+    {
+      "id": "chosen-note",
+      "x": 740,
+      "y": 700,
+      "w": 520,
+      "page": "page-1",
+      "text": "Chosen 13 Sep 2026: F, the blend of E (kept garden) and B (shows its work), with E's scale row folded in.\n\nNext: the brand-book \u2014 logo system and clear space, palette with roles, type rules (serif name \u00b7 sans words \u00b7 mono numbers only), voice, track lockups, messenger and document templates."
+    },
+    {
+      "id": "explored-note",
+      "x": 1480,
+      "y": 1100,
+      "w": 460,
+      "page": "page-2",
+      "text": "The five directions explored before choosing. Kept for reference; the chosen blend lives on the Brand page."
+    }
+  ],
+  "launch": {
+    "view": "canvas",
+    "page": "page-1"
+  }
+}
