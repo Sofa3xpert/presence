@@ -46,7 +46,11 @@ def presence_at(port: int, timeout: float = 1.0) -> bool:
 
 
 def port_free(port: int) -> bool:
+    """Can a server bind here? Checked the way the server itself binds (address
+    reuse on), so connections still closing from the last Presence on this port
+    do not make it look taken and push a restart onto a random port."""
     with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+        s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
         try:
             s.bind(("127.0.0.1", port))
         except OSError:
@@ -55,7 +59,10 @@ def port_free(port: int) -> bool:
 
 
 def pick_port(preferred: int | None = None) -> int:
-    for port in ([preferred] if preferred else PORTS):
+    """The preferred port, else the next free one of Presence's own range, else
+    any free port — so the address stays predictable across restarts."""
+    candidates = ([preferred] if preferred else []) + [p for p in PORTS if p != preferred]
+    for port in candidates:
         if port_free(port):
             return port
     with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
