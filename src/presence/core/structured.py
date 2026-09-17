@@ -183,12 +183,11 @@ def anthropic_json(api_key: str, model: str, system: str, prompt: str, schema: d
     try:
         resp = client.messages.create(
             model=model,
-            max_tokens=4000,
+            max_tokens=16000,
             system=system,
             messages=[{"role": "user", "content": prompt}],
             tools=[{"name": name, "description": "Record the answer.", "input_schema": schema}],
             tool_choice={"type": "tool", "name": name},
-            temperature=0,
         )
     except Exception as exc:
         raise StructuredError(f"{type(exc).__name__}: {str(exc)[:160]}") from exc
