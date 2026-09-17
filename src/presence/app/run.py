@@ -9,6 +9,7 @@ import asyncio
 import json
 import logging
 import socket
+import sys
 import threading
 import time
 import webbrowser
@@ -48,9 +49,14 @@ def presence_at(port: int, timeout: float = 1.0) -> bool:
 def port_free(port: int) -> bool:
     """Can a server bind here? Checked the way the server itself binds (address
     reuse on), so connections still closing from the last Presence on this port
-    do not make it look taken and push a restart onto a random port."""
+    do not make it look taken and push a restart onto a random port.
+
+    Not on Windows: there address reuse lets a bind go through even past a live
+    listener, so a taken port would look free — and a plain bind there already
+    ignores connections that are only closing."""
     with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
-        s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+        if sys.platform != "win32":
+            s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
         try:
             s.bind(("127.0.0.1", port))
         except OSError:
