@@ -120,7 +120,7 @@
 </script>
 </section>
 
-<section class="step {{ 'done' if state.sources_done and state.filters_done else 'todo' }}"><h2>2 · Job boards<span class="need req">required</span></h2>
+<section class="step {{ 'done' if state.sources_done and state.filters_done else 'todo' }}" id="boards"><h2>2 · Job boards<span class="need req">required</span></h2>
 <p class="dataflow">Presence asks these companies' careers pages for their public postings and keeps what it finds here <span class="where local" title="Kept on this computer. It leaves only if you send it somewhere yourself."><svg class="plant"><use href="#plant-local"/></svg>on this computer</span>. It only ever fetches; it sends nothing about you to any board.</p>
 
 <p class="hint">Presence reads company job boards through the interfaces those boards publish, never by scraping. Paste the link of a company's careers page; it works with pages on Greenhouse, Lever, Ashby, Workable and SmartRecruiters.</p>

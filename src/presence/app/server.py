@@ -1106,12 +1106,12 @@ def create_app(data: Path) -> Flask:
             if not hit:
                 flash("Presence can't read that site yet — it works with careers pages on "
                       "Greenhouse, Lever, Ashby, Workable and SmartRecruiters", "error")
-                return redirect(url_for("setup"))
+                return redirect(url_for("setup") + "#boards")
             provider, board = hit
         if provider not in {c["provider"] for c in available()} or not board:
             flash("paste a careers-page link, or open Advanced and fill in the provider "
                   "and board name", "error")
-            return redirect(url_for("setup"))
+            return redirect(url_for("setup") + "#boards")
         label = request.form.get("label", "").strip() or board.replace("-", " ").title()
         cfg = read_yaml(data / "sources.yaml")
         sources = cfg.get("sources", [])
@@ -1129,7 +1129,7 @@ def create_app(data: Path) -> Flask:
         )
         write_yaml(data / "sources.yaml", {"sources": sources})
         flash(f"added {label} ({provider})")
-        return redirect(url_for("setup"))
+        return redirect(url_for("setup") + "#boards")
 
     @app.post("/sources/<sid>/toggle")
     def sources_toggle(sid: str):
@@ -1138,14 +1138,14 @@ def create_app(data: Path) -> Flask:
             if s.get("id") == sid:
                 s["enabled"] = not s.get("enabled", True)
         write_yaml(data / "sources.yaml", cfg)
-        return redirect(url_for("setup"))
+        return redirect(url_for("setup") + "#boards")
 
     @app.post("/sources/<sid>/remove")
     def sources_remove(sid: str):
         cfg = read_yaml(data / "sources.yaml")
         cfg["sources"] = [s for s in cfg.get("sources", []) if s.get("id") != sid]
         write_yaml(data / "sources.yaml", cfg)
-        return redirect(url_for("setup"))
+        return redirect(url_for("setup") + "#boards")
 
     @app.post("/setup/filters")
     def setup_filters():
@@ -1163,7 +1163,7 @@ def create_app(data: Path) -> Flask:
         cfg["saved_at"] = datetime.now().isoformat(timespec="seconds")
         write_yaml(data / "search.yaml", cfg)
         flash("filters saved")
-        return redirect(url_for("setup"))
+        return redirect(url_for("setup") + "#boards")
 
     @app.get("/tracker")
     def tracker_page():
