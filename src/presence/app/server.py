@@ -11,7 +11,7 @@ import secrets as pysecrets
 import subprocess
 import sys
 import time
-from datetime import date, datetime
+from datetime import date, datetime, timedelta
 from pathlib import Path
 from typing import Any
 
@@ -819,6 +819,37 @@ def create_app(data: Path) -> Flask:
             "next_run": runner.next_run(data),
             **extra,
         }
+
+    @app.get("/student")
+    def student_plan():
+        from presence.connectors.ical import load_all_ics, events_for_date, upcoming_events
+        plan_file = data / "student_plan.json"
+        plan = json.loads(plan_file.read_text()) if plan_file.exists() else {}
+        cal_dir = data / "calendars"
+        events = load_all_ics(cal_dir) if cal_dir.is_dir() else []
+        today = date.today()
+        schedule = {}
+        for i in range(7):
+            d = today + timedelta(days=i)
+            day_events = events_for_date(events, d)
+            if day_events:
+                schedule[d] = sorted(day_events, key=lambda e: e.start)
+        brief_file = data / "last_student_brief.txt"
+        brief = brief_file.read_text() if brief_file.exists() else ""
+        return render_template("student.html", page="student", plan=plan,
+                               schedule=schedule, today=today,
+                               total_events=len(events),
+                               cal_files=list(cal_dir.glob("*.ics")) if cal_dir.is_dir() else [],
+                               brief=brief)
+
+    @app.post("/student/brief")
+    def student_brief():
+        from presence.agents.student_brief import compose_student_brief
+        cal_dir = data / "calendars"
+        brief = compose_student_brief(cal_dir)
+        (data / "last_student_brief.txt").write_text(brief)
+        flash("daily brief generated")
+        return redirect(url_for("student_plan"))
 
     @app.get("/run")
     def run_page():

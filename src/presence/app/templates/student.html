@@ -1,0 +1,117 @@
+{% extends "base.html" %}{% block content %}
+<h1>Student Presence</h1>
+<p class="lede">Your university life in one daily brief. Everything runs locally — your data never leaves this machine.</p>
+
+<section class="step {{ 'done' if total_events else 'todo' }}"><h2>Your Week</h2>
+{% if total_events %}
+<p class="hint">{{ total_events }} events loaded from {{ cal_files|length }} calendar file{{ 's' if cal_files|length != 1 else '' }}.</p>
+{% for day, events in schedule.items() %}
+<h3>{{ '>>> Today' if day == today else day.strftime('%A') }} · {{ day.strftime('%d %b') }}</h3>
+<table>
+  <tr><th>Time</th><th>Class</th><th>Room</th></tr>
+  {% for e in events %}
+  <tr>
+    <td class="mono">{{ e.format_time() }}</td>
+    <td>{{ e.summary }}</td>
+    <td>{{ e.location }}</td>
+  </tr>
+  {% endfor %}
+</table>
+{% endfor %}
+{% if not schedule %}
+<p class="hint">No classes in the next 7 days.</p>
+{% endif %}
+{% else %}
+<p class="hint">No calendar loaded yet. Place a <code>.ics</code> file in <code>{{ data_dir }}/calendars/</code> to see your schedule here.</p>
+{% endif %}
+</section>
+
+<section class="step {{ 'done' if brief else 'todo' }}"><h2>Daily Brief</h2>
+{% if brief %}
+<pre class="brief">{{ brief }}</pre>
+{% else %}
+<p class="hint">No brief generated yet. Click the button to create today's brief.</p>
+{% endif %}
+<form method="post" action="/student/brief" style="margin-top:12px">
+  <button type="submit">Generate today's brief</button>
+</form>
+</section>
+
+<section class="step todo"><h2>What you get</h2>
+<div class="row" style="gap:24px">
+<div style="flex:1;min-width:260px">
+  <h3>Daily Student Brief</h3>
+  <p>A morning Telegram message with:</p>
+  <ul>
+    <li>Today's classes and exams</li>
+    <li>Upcoming homework deadlines</li>
+    <li>Important university emails (flagged by AI)</li>
+    <li>Yesterday's recap if you missed anything</li>
+  </ul>
+</div>
+<div style="flex:1;min-width:260px">
+  <h3>Opportunity Scout</h3>
+  <p>Same as job Presence, but for:</p>
+  <ul>
+    <li>Internships</li>
+    <li>Mentorships</li>
+    <li>Scholarships</li>
+    <li>Student events / career fairs</li>
+  </ul>
+</div>
+</div>
+</section>
+
+<section class="step todo"><h2>Data Sources (Connectors)</h2>
+<table>
+  <tr><th>Source</th><th>How</th><th>Status</th></tr>
+  <tr><td>Class timetable</td><td>iCal import (.ics file) or Google Calendar</td><td><span class="pill {{ 'on' if total_events else 'off' }}">{{ 'done' if total_events else 'planned' }}</span></td></tr>
+  <tr><td>Exam timetable</td><td>Same — iCal or manual entry</td><td><span class="pill off">planned</span></td></tr>
+  <tr><td>Homework deadlines</td><td>University LMS (Canvas, Moodle, Blackboard) or manual</td><td><span class="pill off">planned</span></td></tr>
+  <tr><td>University email</td><td>IMAP connection (most unis use Gmail/Outlook)</td><td><span class="pill off">planned</span></td></tr>
+</table>
+</section>
+
+<section class="step todo"><h2>Build Plan</h2>
+<p class="hint">We're building this step by step. Each feature lights up here as it's done.</p>
+<table>
+  <tr><th>#</th><th>Step</th><th>What it does</th><th>Status</th></tr>
+  <tr>
+    <td>1</td>
+    <td>iCal connector</td>
+    <td>Import .ics files — classes, exams, deadlines appear in the system</td>
+    <td><span class="pill {{ 'on' if total_events else 'off' }}">{{ 'done' if total_events else 'planned' }}</span></td>
+  </tr>
+  <tr>
+    <td>2</td>
+    <td>Student daily brief agent</td>
+    <td>Morning Telegram message with today's schedule + deadlines</td>
+    <td><span class="pill {{ 'on' if plan.brief else 'off' }}">{{ 'done' if plan.brief else 'planned' }}</span></td>
+  </tr>
+  <tr>
+    <td>3</td>
+    <td>Email connector (IMAP)</td>
+    <td>Read-only access to university inbox, AI flags important emails</td>
+    <td><span class="pill {{ 'on' if plan.email else 'off' }}">{{ 'done' if plan.email else 'planned' }}</span></td>
+  </tr>
+  <tr>
+    <td>4</td>
+    <td>LMS connector</td>
+    <td>Pull homework deadlines from Canvas / Moodle / Blackboard</td>
+    <td><span class="pill {{ 'on' if plan.lms else 'off' }}">{{ 'done' if plan.lms else 'planned' }}</span></td>
+  </tr>
+  <tr>
+    <td>5</td>
+    <td>Opportunity Scout</td>
+    <td>Find internships, scholarships, mentorships, student events</td>
+    <td><span class="pill {{ 'on' if plan.scout else 'off' }}">{{ 'done' if plan.scout else 'planned' }}</span></td>
+  </tr>
+  <tr>
+    <td>6</td>
+    <td>Student setup UI</td>
+    <td>Configure everything from this page — calendar, email, filters</td>
+    <td><span class="pill {{ 'on' if plan.ui else 'off' }}">{{ 'done' if plan.ui else 'planned' }}</span></td>
+  </tr>
+</table>
+</section>
+{% endblock %}
