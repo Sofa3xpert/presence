@@ -1,4 +1,4 @@
-"""The stories bank in the app: drafted by a proper CV read, kept or edited by the person."""
+"""The stories bank: drafted by a proper CV read, kept or edited by the person on its own page."""
 
 from presence.app import cvextract, cvs, server, stories
 from presence.app.config_io import write_yaml
@@ -47,33 +47,40 @@ def test_a_proper_read_drafts_stories_for_the_person_to_keep(tmp_path, monkeypat
     assert all(not s["confirmed"] and s["source"] == f"cv:{m['id']}" for s in bank)
     assert bank[0]["tags"] == ["Analyst · Acme"] and bank[2]["tags"] == ["Dashboard"]
     assert stories.list_stories(tmp_path, confirmed_only=True) == []  # nothing used yet
-    page = c.get("/").data.decode()
-    assert "Your stories" in page and "3 drafted from your CV" in page
+    setup = c.get("/").data.decode()  # Setup only summarises and points at the page
+    assert "Your stories" in setup and "3 drafted from your CV" in setup
+    assert "Open your stories" in setup and "from your CV — keep?" not in setup
+    page = c.get("/stories").data.decode()
+    assert "To review" in page and "3 from your CV" in page
     assert page.count("from your CV — keep?") == 3 and "kept</span>" not in page
+    assert page.count("from your CV · Analyst") == 3  # where each one came from
     assert page.index("Used by 30 people") < page.index("Cut monthly reporting")  # newest first
     st = c.post(f"/cv/{m['id']}/read?json=1").get_json()
     assert st["stories_added"] == 0 and len(stories.list_stories(tmp_path)) == 3
 
 
-def test_stories_routes_add_keep_edit_remove(tmp_path):
+def test_stories_page_add_keep_edit_remove_and_filter(tmp_path):
     c = _client(tmp_path)
-    page = c.get("/").data.decode()
-    assert "Your stories" in page and "No stories yet" in page
+    setup = c.get("/").data.decode()
+    assert "Your stories" in setup and "No stories yet" in setup and 'href="/stories"' in setup
+    page = c.get("/stories").data.decode()
+    assert "No stories yet" in page and "Add a story" in page and "Stories</a>" in page
     r = c.post("/stories/add", data={"text": "  Rebuilt the monthly reporting pack; cut "
                                              "turnaround by 40%.  ",
                                      "tags": "reporting, Excel, "}, follow_redirects=True)
-    assert b"story added" in r.data
+    assert b"story added" in r.data and r.request.path == "/stories"
     s = stories.list_stories(tmp_path)[0]
     assert s["confirmed"] and s["source"] == "session" and s["tags"] == ["reporting", "Excel"]
     assert s["text"] == "Rebuilt the monthly reporting pack; cut turnaround by 40%."
-    page = c.get("/").data.decode()
+    page = c.get("/stories").data.decode()
     assert "kept</span>" in page and ">Excel</span>" in page and "Keep</button>" not in page
+    assert "typed by you" in page and "To review" not in page
     r = c.post("/stories/add", data={"text": "   "}, follow_redirects=True)
     assert b"write the story first" in r.data and len(stories.list_stories(tmp_path)) == 1
     d = stories.add(tmp_path, "Wrote the SQL models finance uses.", source="cv:x",
                     confirmed=False)
-    page = c.get("/").data.decode()
-    assert "from your CV — keep?" in page and "Keep</button>" in page
+    page = c.get("/stories").data.decode()
+    assert "from your CV — keep?" in page and "Keep</button>" in page and "To review" in page
     r = c.post(f"/stories/{d['id']}/confirm", follow_redirects=True)
     assert b"kept" in r.data and stories.get(tmp_path, d["id"])["confirmed"]
     e = stories.add(tmp_path, "Ran the weekly stand-up for a team of six.", source="cv:x",
@@ -84,10 +91,17 @@ def test_stories_routes_add_keep_edit_remove(tmp_path):
     assert b"story updated and kept" in r.data
     e2 = stories.get(tmp_path, e["id"])
     assert e2["text"].endswith("for a year.") and e2["tags"] == ["teamwork"] and e2["confirmed"]
+    j = stories.add(tmp_path, "Answered the take-home in a weekend.", source="session", job_id=7)
+    page = c.get("/stories").data.decode()  # tags to filter by, and where each came from
+    assert 'href="/stories?tag=teamwork"' in page and 'href="/tracker/7/session"' in page
+    assert "from a message session" in page
+    page = c.get("/stories?tag=teamwork").data.decode()
+    assert "for a year." in page and "cut turnaround by 40%" not in page
+    assert "Nothing kept under" in c.get("/stories?tag=nothing").data.decode()
     r = c.post(f"/stories/{s['id']}/remove", follow_redirects=True)
     assert b"story removed" in r.data and stories.get(tmp_path, s["id"]) is None
     for path in ("/stories/sto-nope/remove", "/stories/sto-nope/confirm",
                  "/stories/sto-nope/update"):
         r = c.post(path, data={"text": "x"}, follow_redirects=True)
-        assert b"not in your bank" in r.data
-    assert len(stories.list_stories(tmp_path)) == 2
+        assert b"not in your bank" in r.data and r.request.path == "/stories"
+    assert len(stories.list_stories(tmp_path)) == 3 and stories.get(tmp_path, j["id"])

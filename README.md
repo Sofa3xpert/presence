@@ -79,6 +79,14 @@ Your applications live on the Tracker page, where each row remembers which CV yo
   <img src="docs/readme/tracker.png" alt="The tracker: five roles with status, a dated timeline and the CV used for each" width="820">
 </p>
 
+Two more pages sit beside Setup, Tracker and Run. **Stories** is the bank of
+things you have done, in your own words: what you type there, what you save
+during a message session, and what Presence drafts from a proper CV read for
+you to keep or discard. **Models** shows what Presence thinks with right now,
+every model on this computer with its size, context window and whether it is
+loaded, the room left in memory and on disk, and lets you turn local models on
+and off, get new ones, remove old ones, or switch to a service under your key.
+
 <p align="center">
   <img src="docs/readme/session.png" alt="Prepare a message: Presence asks, you answer, it proposes angles, then writes from your words with a why panel" width="900">
   <br><em>Prepare a message. Presence asks, you answer, it writes from your words — and shows its sources.</em>

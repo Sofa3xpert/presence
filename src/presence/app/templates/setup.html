@@ -88,29 +88,11 @@
 {% endif %}
 <div class="cvbox" style="margin-top:14px;border-width:1px 0 0;padding:12px 0 0;background:none">
 <h3>Your stories</h3>
-<p class="hint">Things you have done, in your own words. Presence draws on them when it writes with you. Unconfirmed ones came from your CV; keep the true ones.</p>
-{% set drafts = state.stories|rejectattr('confirmed')|list %}
+<p class="hint">Things you have done, in your own words. Presence draws on them when it writes with you. They have their own page now.</p>
+{% set drafts = state.stories|rejectattr('confirmed')|list %}{% set kept = state.stories|selectattr('confirmed')|list %}
 {% if drafts %}<p class="hint"><strong>{{ drafts|length }} drafted from your CV</strong> — keep the ones that are true, fix the wording, or remove the rest.</p>{% endif %}
-{% for s in state.stories|reverse %}<div class="cvcard" style="display:block">
-  <div>{{ s.text }}</div>
-  <div class="meta" style="margin:4px 0 6px;font-size:12px">{% for t in s.tags %}<span class="pill" style="font-size:11px;padding:1px 7px">{{ t }}</span> {% endfor %}{% if s.confirmed %}<span class="pill on">kept</span>{% else %}<span class="pill off">from your CV — keep?</span>{% endif %}</div>
-  {% if not s.confirmed %}<form method="post" action="{{ url_for('story_confirm', sid=s.id) }}"><button class="small">Keep</button></form> {% endif %}<form method="post" action="{{ url_for('story_remove', sid=s.id) }}"><button class="danger small">Remove</button></form>
-  <details style="margin-top:6px"><summary style="cursor:pointer;font-size:13px">Edit</summary>
-    <form method="post" action="{{ url_for('story_update', sid=s.id) }}" class="stack" style="margin:6px 0 0;display:flex">
-      <input type="text" name="text" value="{{ s.text }}" aria-label="story" style="width:100%">
-      <input type="text" name="tags" value="{{ s.tags|join(', ') }}" placeholder="tags, comma-separated" aria-label="tags" style="width:100%">
-      <div><button class="small">Save</button> <span class="hint" style="display:inline;margin:0">saving keeps it</span></div>
-    </form>
-  </details>
-</div>{% endfor %}
-{% if not state.stories %}<p class="hint" style="margin:0 0 6px">No stories yet. Add one below — or read a CV properly with the model and Presence drafts some for you to check.</p>{% endif %}
-<details style="margin-top:8px"><summary style="cursor:pointer">Add a story</summary>
-<form method="post" action="{{ url_for('story_add') }}" class="stack" style="margin-top:6px">
-  <label>What you did, in a sentence or two<textarea name="text" placeholder="e.g. Rebuilt the monthly reporting pack and cut the turnaround from 3 days to 1."></textarea></label>
-  <label>Tags (optional, comma-separated)<input type="text" name="tags" placeholder="e.g. reporting, Excel"></label>
-  <div><button>Add this story</button></div>
-</form>
-</details>
+{% if state.stories %}<p class="hint" style="margin:0 0 8px">{{ kept|length }} kept{% if drafts %}, {{ drafts|length }} to review{% endif %}. Latest: “{{ (state.stories|last).text|truncate(90) }}”</p>{% else %}<p class="hint" style="margin:0 0 8px">No stories yet. Add one on the Stories page — or read a CV properly with the model and Presence drafts some for you to check.</p>{% endif %}
+<a class="button" href="{{ url_for('stories_page') }}">Open your stories</a>
 </div>
 </aside>
 </div>
@@ -176,10 +158,11 @@
 </form>
 </section>
 
-<section class="step {{ 'done' if state.model_done else 'todo' }}"><h2>3 · Model<span class="need opt">recommended</span></h2>
+<section class="step {{ 'done' if state.model_done else 'todo' }}" id="model"><h2>3 · Model<span class="need opt">recommended</span></h2>
 <p class="dataflow">The local engine runs on this computer <span class="where local" title="Kept on this computer. It leaves only if you send it somewhere yourself."><svg class="plant"><use href="#plant-local"/></svg>on this computer</span>: free, private, nothing leaves. With an API key instead, the text Presence needs judged, postings and your filters, goes to that company's service under your key <span class="where cloud" title="Handled by a company's service under your own key or account. They see what is sent."><svg class="plant"><use href="#plant-cloud"/></svg>through a service</span>; your CV goes to it only when you press "Read properly with the model" in step 1. Or point Presence at a server you run yourself <span class="where yours" title="Goes to a place that is yours: a server you run or rent, at the address you give."><svg class="plant"><use href="#plant-yours"/></svg>your own server</span>: the text goes there and nowhere else. Today the daily cycle uses your filters only; the model reads your CV properly and, later, judges postings.</p>
 <div class="optrow"><span class="where local" title="Runs on this computer."><svg class="plant"><use href="#plant-local"/></svg>Local engine</span> <span class="where cloud" title="Your text goes to Anthropic under your key."><svg class="plant"><use href="#plant-cloud"/></svg>Anthropic API</span> <span class="where cloud" title="Your text goes to OpenAI under your key."><svg class="plant"><use href="#plant-cloud"/></svg>OpenAI API</span> <span class="where yours" title="Your text goes to a server you run or rent, at the address you give."><svg class="plant"><use href="#plant-yours"/></svg>your own server</span></div>
 
+<p class="hint">What is on this computer, what is loaded, how much room is left, and switching between models: the <a href="{{ url_for('models_page') }}">Models page</a>. Keys and addresses are saved here.</p>
 <div id="engine-block" {{ 'hidden' if state.model.kind != 'local' }}>
 <div id="ollama" class="row" style="align-items:center;gap:12px;margin-bottom:12px">
   <span class="pill" id="ollama-pill">checking…</span>

@@ -136,6 +136,7 @@ def recommend_model(total_ram_gb: float | None) -> tuple[str, str]:
 def start(sysname: str | None = None) -> str:
     """Start the local engine: Presence's embedded copy when it is installed,
     else the person's own Ollama. Returns a short message; never raises."""
+    global _served
     sysname = sysname or system()
     eng = engine()
     if eng is not None and eng.installed():
@@ -150,7 +151,7 @@ def start(sysname: str | None = None) -> str:
             subprocess.Popen(["open", "-a", "Ollama"])
             return "starting the Ollama app"
         if binary:
-            subprocess.Popen(
+            _served = subprocess.Popen(
                 [binary, "serve"],
                 stdout=subprocess.DEVNULL,
                 stderr=subprocess.DEVNULL,
@@ -303,3 +304,204 @@ def readiness(model: str, base_url: str | None = None) -> tuple[bool, str]:
         if ok
         else "the model did not call the tool — pick a model that supports tools"
     )
+
+
+# ---- the Models page: what is here, what is loaded, and how much room is left ----
+
+_shows: dict[str, dict[str, Any]] = {}  # /api/show answers, remembered per digest
+_served: subprocess.Popen[bytes] | None = None  # an `ollama serve` Presence started itself
+
+
+def models_dir(info: dict[str, Any] | None = None) -> Path:
+    """Where model files live: Presence's engine folder when its own engine is
+    the one in play, otherwise the person's own Ollama store."""
+    eng = engine()
+    info = info or engine_info()
+    if eng is not None and (info.get("kind") == "embedded"
+                            or (info.get("kind") == "none" and info.get("installed"))):
+        return eng.models
+    env = os.environ.get("OLLAMA_MODELS")
+    return Path(env) if env else Path.home() / ".ollama" / "models"
+
+
+def disk_usage(path: Path) -> dict[str, float | None]:
+    """Free and total space on the disk that holds ``path`` (or its nearest parent)."""
+    p = Path(path)
+    while not p.exists() and p != p.parent:
+        p = p.parent
+    try:
+        u = shutil.disk_usage(p)
+    except OSError:
+        return {"total_gb": None, "free_gb": None}
+    return {"total_gb": round(u.total / 2**30, 1), "free_gb": round(u.free / 2**30, 1)}
+
+
+def _model_row(name: str, size: int, digest: str = "", modified: str = "",
+               details: dict[str, Any] | None = None) -> dict[str, Any]:
+    d = details or {}
+    return {"name": name, "size": int(size or 0), "digest": digest, "modified": modified,
+            "family": d.get("family", ""), "params": d.get("parameter_size", ""),
+            "quant": d.get("quantization_level", ""), "loaded": False, "memory": 0,
+            "vram": 0, "expires": "", "context": None, "capabilities": []}
+
+
+def list_models(base_url: str | None = None) -> list[dict[str, Any]]:
+    """Installed models as the engine lists them (/api/tags)."""
+    base_url = base_url or resolve_base_url()
+    try:
+        tags = requests.get(f"{base_url}/api/tags", timeout=4).json().get("models", [])
+    except Exception:
+        return []
+    rows = [_model_row(m["name"], m.get("size") or 0, m.get("digest", ""),
+                       str(m.get("modified_at") or "")[:10], m.get("details"))
+            for m in tags if m.get("name")]
+    return sorted(rows, key=lambda m: m["name"])
+
+
+def loaded_models(base_url: str | None = None) -> dict[str, dict[str, Any]]:
+    """Models resident in memory right now (/api/ps), by name."""
+    base_url = base_url or resolve_base_url()
+    try:
+        ps = requests.get(f"{base_url}/api/ps", timeout=4).json().get("models", [])
+    except Exception:
+        return {}
+    return {m["name"]: {"memory": int(m.get("size") or 0), "vram": int(m.get("size_vram") or 0),
+                        "expires": str(m.get("expires_at") or "")[:19]}
+            for m in ps if m.get("name")}
+
+
+def show_model(name: str, digest: str = "", base_url: str | None = None) -> dict[str, Any]:
+    """Context length and capabilities (/api/show), remembered per digest so a
+    page refresh does not ask again."""
+    if digest and digest in _shows:
+        return _shows[digest]
+    base_url = base_url or resolve_base_url()
+    try:
+        d = requests.post(f"{base_url}/api/show", json={"model": name}, timeout=6).json()
+    except Exception:
+        return {}
+    info = d.get("model_info") or {}
+    ctx = next((v for k, v in info.items() if str(k).endswith(".context_length")), None)
+    out = {"context": int(ctx) if ctx else None,
+           "capabilities": [str(c) for c in (d.get("capabilities") or [])]}
+    if digest:
+        _shows[digest] = out
+    return out
+
+
+def _engine_reply(r: Any) -> tuple[bool, str]:
+    try:
+        body = r.json() if r.content else {}
+    except ValueError:
+        body = {}
+    err = body.get("error") if isinstance(body, dict) else ""
+    if r.status_code != 200 or err:
+        return False, str(err or f"the engine answered {r.status_code}")[:160]
+    return True, "ok"
+
+
+def load_model(name: str, base_url: str | None = None,
+               keep_alive: str | int = -1) -> tuple[bool, str]:
+    """Bring a model into memory and keep it there until it is unloaded: an empty
+    generate with ``keep_alive`` — nothing is asked of the model."""
+    base_url = base_url or resolve_base_url()
+    try:
+        r = requests.post(f"{base_url}/api/generate",
+                          json={"model": name, "keep_alive": keep_alive}, timeout=(10, 600))
+    except Exception as exc:
+        return False, f"{type(exc).__name__}: {str(exc)[:120]}"
+    return _engine_reply(r)
+
+
+def unload_model(name: str, base_url: str | None = None) -> tuple[bool, str]:
+    """Free the memory a model holds (keep_alive 0)."""
+    return load_model(name, base_url, keep_alive=0)
+
+
+def delete_model(name: str, base_url: str | None = None) -> tuple[bool, str]:
+    """Remove a model's files from this computer (/api/delete)."""
+    base_url = base_url or resolve_base_url()
+    try:
+        r = requests.delete(f"{base_url}/api/delete", json={"model": name}, timeout=30)
+    except Exception as exc:
+        return False, f"{type(exc).__name__}: {str(exc)[:120]}"
+    return _engine_reply(r)
+
+
+def models_on_disk(root: Path) -> list[dict[str, Any]]:
+    """Installed models read from the store itself, for when the engine is off:
+    manifests/<registry>/<namespace>/<name>/<tag>; the size is its layers."""
+    from datetime import date
+
+    manifests = Path(root) / "manifests"
+    rows: list[dict[str, Any]] = []
+    if not manifests.exists():
+        return rows
+    for f in manifests.rglob("*"):
+        parts = f.relative_to(manifests).parts
+        if not f.is_file() or len(parts) < 4:
+            continue
+        try:
+            d = json.loads(f.read_text())
+            size = sum(int(layer.get("size") or 0) for layer in d.get("layers", []))
+            added = date.fromtimestamp(f.stat().st_mtime).isoformat()
+        except (OSError, ValueError, TypeError, AttributeError):
+            continue
+        registry, ns, name, tag = parts[0], parts[-3], parts[-2], parts[-1]
+        full = f"{name}:{tag}" if ns == "library" else f"{ns}/{name}:{tag}"
+        if registry != "registry.ollama.ai":
+            full = f"{registry}/{full}"
+        rows.append(_model_row(full, size, modified=added))
+    return sorted(rows, key=lambda m: m["name"])
+
+
+def stop(sysname: str | None = None) -> str:
+    """Stop the local engine: Presence's own copy when that is the one running,
+    the `ollama serve` Presence started, or the Ollama app on a Mac. Anything
+    else was started outside Presence and is left alone."""
+    global _served
+    sysname = sysname or system()
+    info = engine_info()
+    eng = engine()
+    if info.get("kind") == "embedded" and eng is not None:
+        try:
+            eng.stop()
+        except Exception as exc:
+            return f"could not stop the local engine: {str(exc)[:120]}"
+        return "the local engine is stopped — every loaded model is out of memory"
+    if info.get("kind") != "system":
+        return "the local engine is not running"
+    if _served is not None and _served.poll() is None:
+        _served.terminate()
+        _served = None
+        return "Ollama is stopped — every loaded model is out of memory"
+    if sysname == "Darwin" and Path("/Applications/Ollama.app").exists():
+        try:
+            subprocess.run(["osascript", "-e", 'tell application "Ollama" to quit'],
+                           timeout=10, check=False, capture_output=True)
+        except Exception as exc:
+            return f"could not quit the Ollama app: {type(exc).__name__}"
+        return "asked the Ollama app to quit"
+    return ("your Ollama was started outside Presence — stop it where you started it "
+            "(the terminal running `ollama serve`, or the Ollama app)")
+
+
+def overview(base_url: str | None = None) -> dict[str, Any]:
+    """Everything the Models page shows, in one call: the engine, the machine,
+    every model on this computer with its size and whether it is loaded."""
+    st = status(base_url)
+    url = st["base_url"]
+    root = models_dir(st.get("engine"))
+    if st["running"]:
+        models = list_models(url)
+        live = loaded_models(url)
+        for m in models:
+            m.update(show_model(m["name"], m["digest"], url))
+            if m["name"] in live:
+                m.update(live[m["name"]], loaded=True)
+    else:
+        models = models_on_disk(root)
+    total = sum(m["size"] for m in models)
+    return {**st, "models": models, "models_dir": str(root),
+            "models_size_gb": round(total / 2**30, 2), "disk": disk_usage(root),
+            "loaded_count": sum(1 for m in models if m["loaded"])}

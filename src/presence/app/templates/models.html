@@ -1,0 +1,117 @@
+{% extends "base.html" %}{% block content %}
+<h1>Models</h1>
+<p class="lede">Which model Presence thinks with, what is on this computer, what is loaded right now, and how much room is left. Turn local models on and off here, get new ones, remove old ones.</p>
+<div class="legend"><span>Where things go:</span> <span class="where local" title="Runs on this computer."><svg class="plant"><use href="#plant-local"/></svg>on this computer</span> <span class="where yours" title="A server you run or rent, at the address you give."><svg class="plant"><use href="#plant-yours"/></svg>your own server</span> <span class="where cloud" title="A company's service under your own key. They see what is sent."><svg class="plant"><use href="#plant-cloud"/></svg>through a service</span></div>
+
+{% set k = current.kind %}{% set mark = 'local' if k == 'local' else 'yours' if k == 'endpoint' else 'cloud' %}
+<section class="step {{ 'done' if current_ready else 'todo' }}"><h2>In use now</h2>
+<div class="row" style="align-items:center;gap:12px">
+  <span class="where {{ mark }}"><svg class="plant"><use href="#plant-{{ mark }}"/></svg>{{ provider_names.get(k, k) }}</span>
+  <strong class="mono" style="font-size:15px">{{ current.model or 'no model chosen yet' }}</strong>
+  <span class="pill {{ 'on' if current_ready else 'off' }}">{{ 'ready' if current_ready else 'not ready' }}</span>
+  {% if current_row %}<span class="pill {{ 'on' if current_row.loaded else 'off' }}">{% if current_row.loaded %}on · {{ current_row.memory|gb }} in memory{% else %}off · loads on first use{% endif %}</span>{% endif %}
+  {% if current.model %}<form method="post" action="{{ url_for('model_test') }}"><input type="hidden" name="back" value="models"><button class="quiet small">Test this model</button></form>{% endif %}
+  <a href="{{ url_for('setup') }}#model" class="hint" style="margin:0">keys and addresses are in Setup, step 3</a>
+</div>
+{% if k == 'endpoint' and current.base_url %}<p class="hint" style="margin:6px 0 0">at <span class="mono">{{ current.base_url }}</span></p>{% endif %}
+</section>
+
+<section class="step"><h2>Local engine <span class="where local" title="Runs on this computer."><svg class="plant"><use href="#plant-local"/></svg>on this computer</span></h2>
+<div class="statgrid">
+  <div class="stat"><span class="k">Engine</span><span class="v" id="eng-state">{{ ('running · ' ~ ov.version) if ov.running else 'stopped' }}</span><span class="k2">{% if ov.engine.kind == 'embedded' %}Presence's own copy{% elif ov.engine.kind == 'system' %}your Ollama{% elif ov.engine.installed %}Presence's own copy, ready to start{% elif ov.installed %}your Ollama, installed{% else %}none installed yet{% endif %}{% if ov.engine.port %} · port {{ ov.engine.port }}{% endif %}</span></div>
+  <div class="stat"><span class="k">Memory</span><span class="v">{{ (ov.ram_gb ~ ' GB') if ov.ram_gb else '?' }}</span><span class="k2" id="loaded-count">{{ ov.loaded_count }} model{{ '' if ov.loaded_count == 1 else 's' }} loaded now</span></div>
+  <div class="stat"><span class="k">Models on disk</span><span class="v" id="models-size">{{ ov.models_size_gb }} GB</span><span class="k2 mono">{{ ov.models_dir }}</span></div>
+  <div class="stat {{ 'warn' if ov.disk.free_gb is not none and ov.disk.free_gb < 10 }}"><span class="k">Disk free</span><span class="v" id="disk-free">{{ ov.disk.free_gb if ov.disk.free_gb is not none else '?' }} GB</span><span class="k2">of {{ ov.disk.total_gb }} GB{% if ov.disk.free_gb is not none and ov.disk.free_gb < 10 %} · getting tight{% endif %}</span></div>
+</div>
+<div class="row" style="align-items:center;gap:12px">
+  {% if ov.running %}<form method="post" action="{{ url_for('ollama_stop') }}"><input type="hidden" name="back" value="models"><button class="quiet">Stop the engine</button></form><span class="hint" style="margin:0">stopping frees the memory every loaded model holds.</span>
+  {% else %}<form method="post" action="{{ url_for('ollama_start') }}"><input type="hidden" name="back" value="models"><button>Start the engine</button></form><span class="hint" style="margin:0">{% if ov.engine.installed or ov.installed %}models can be used, turned on and removed once it runs.{% else %}get the local engine in Setup, step 3, or use a service below.{% endif %}</span>{% endif %}
+</div>
+</section>
+
+<section class="step"><h2>Models on this computer</h2>
+<p class="dataflow">These files never leave this computer. A model that is <em>on</em> sits in memory and answers at once; <em>off</em> means it is only on disk and loads on first use.</p>
+<table class="models">
+<thead><tr><th>Model</th><th>Family</th><th>Size on disk</th><th>Context</th><th>Status</th><th>Actions</th></tr></thead>
+<tbody>
+{% for m in ov.models %}{% set inuse = k == 'local' and m.name == current.model %}
+<tr data-model="{{ m.name }}" class="{{ 'inuse' if inuse }}">
+  <td><strong class="mono">{{ m.name }}</strong>{% if inuse %} <span class="pill on">in use</span>{% endif %}<br><span class="tag">{{ m.params }}{% if m.quant %} · {{ m.quant }}{% endif %}{% if m.modified %} · added {{ m.modified }}{% endif %}</span></td>
+  <td>{{ m.family or '—' }}{% if 'tools' in m.capabilities %} <span class="pill on" title="can call tools — what Presence needs">tools</span>{% endif %}</td>
+  <td>{{ m.size|gb }}</td>
+  <td>{{ m.context|ctx }}</td>
+  <td class="status">{% if m.loaded %}<span class="pill on">on · {{ m.memory|gb }} in memory</span>{% else %}<span class="pill off">off · on disk</span>{% endif %}</td>
+  <td class="actions">{% if ov.running %}{% if not inuse %}<form method="post" action="{{ url_for('models_use') }}"><input type="hidden" name="kind" value="local"><input type="hidden" name="model" value="{{ m.name }}"><button class="small">Use</button></form>{% endif %}
+    {% if m.loaded %}<form method="post" action="{{ url_for('models_unload') }}"><input type="hidden" name="model" value="{{ m.name }}"><button class="quiet small">Turn off</button></form>{% else %}<form method="post" action="{{ url_for('models_load') }}"><input type="hidden" name="model" value="{{ m.name }}"><button class="quiet small" title="loads it into memory now — takes a moment">Turn on</button></form>{% endif %}
+    <details><summary>Remove…</summary><form method="post" action="{{ url_for('models_remove') }}"><input type="hidden" name="model" value="{{ m.name }}"><button class="danger small">Delete {{ m.size|gb }} from disk</button></form></details>
+  {% else %}<span class="hint" style="margin:0">start the engine first</span>{% endif %}</td>
+</tr>
+{% endfor %}
+{% if not ov.models %}<tr><td colspan="6"><span class="hint" style="margin:0">No models on this computer yet. Get one below.</span></td></tr>{% endif %}
+</tbody></table>
+
+<h3>Get a model</h3>
+<p class="hint">Recommended for {{ (ov.ram_gb ~ ' GB') if ov.ram_gb else 'this machine' }}: <span class="mono">{{ ov.recommended }}</span> ({{ ov.recommended_size }}).{% if ov.disk.free_gb is not none %} {{ ov.disk.free_gb }} GB free on disk.{% endif %} Only a model that can call tools works with Presence; the test proves it.</p>
+<div class="row" style="align-items:flex-end;gap:12px">
+  <label>Model to get<input type="text" id="pull-model" value="{{ ov.recommended }}" {{ 'disabled' if not ov.running }}></label>
+  <button type="button" class="quiet" id="pull-btn" {{ 'disabled' if not ov.running }}>Get it</button>
+  <span id="pull-text" class="hint" style="margin:0">{{ '' if ov.running else 'start the engine first' }}</span>
+  <form method="post" action="{{ url_for('ollama_check') }}"><input type="hidden" name="back" value="models"><input type="hidden" name="model" id="check-model" value="{{ ov.recommended }}"><button {{ 'disabled' if not ov.running }}>Test and use it</button></form>
+</div>
+</section>
+
+<section class="step"><h2>Hosted services and your own server</h2>
+<p class="dataflow">With a service, the text Presence needs judged goes to that company under your key <span class="where cloud" title="Handled by a company's service under your own key. They see what is sent."><svg class="plant"><use href="#plant-cloud"/></svg>through a service</span>; your CV goes only when you ask for a proper read. A server of your own gets the text and nothing else <span class="where yours" title="A server you run or rent, at the address you give."><svg class="plant"><use href="#plant-yours"/></svg>your own server</span>.</p>
+<div class="cards">
+  {% for kind, title in (('anthropic', 'Anthropic'), ('openai', 'OpenAI')) %}
+  <div class="card"><h3>{{ title }} <span class="pill {{ 'on' if keys[kind] else 'off' }}">{{ 'key saved' if keys[kind] else 'no key' }}</span>{% if k == kind %} <span class="pill on">in use</span>{% endif %}</h3>
+    <form method="post" action="{{ url_for('models_use') }}" class="stack"><input type="hidden" name="kind" value="{{ kind }}">
+      <label>Model id<input type="text" name="model" list="{{ kind }}-models" value="{{ current.model if k == kind else suggested[kind][0] }}"></label>
+      <datalist id="{{ kind }}-models">{% for m in suggested[kind] %}<option value="{{ m }}">{% endfor %}</datalist>
+      <div><button class="small" {{ 'disabled' if not keys[kind] }}>Use</button> {% if not keys[kind] %}<span class="hint" style="display:inline;margin:0">add the key in Setup, step 3</span>{% endif %}</div>
+    </form></div>
+  {% endfor %}
+  <div class="card"><h3>Your own server <span class="pill {{ 'on' if endpoint_models is not none else 'off' }}">{{ 'answering' if endpoint_models is not none else ('not answering' if endpoint_url else 'no address') }}</span>{% if k == 'endpoint' %} <span class="pill on">in use</span>{% endif %}</h3>
+    {% if endpoint_url %}<p class="hint mono" style="margin:0 0 6px">{{ endpoint_url }}</p>{% endif %}
+    {% if endpoint_models %}<div class="storychips">{% for m in endpoint_models %}<form method="post" action="{{ url_for('models_use') }}" class="row" style="gap:8px;align-items:center"><input type="hidden" name="kind" value="endpoint"><input type="hidden" name="model" value="{{ m }}"><span class="mono">{{ m }}</span>{% if k == 'endpoint' and current.model == m %}<span class="pill on">in use</span>{% else %}<button class="small">Use</button>{% endif %}</form>{% endfor %}</div>
+    {% elif endpoint_url %}<p class="hint" style="margin:0">Nothing OpenAI-style answers there right now.</p>
+    {% else %}<p class="hint" style="margin:0">Add its address in Setup, step 3, and the models it serves appear here.</p>{% endif %}
+  </div>
+</div>
+</section>
+
+<script>
+(function () {
+  const wasRunning = {{ 'true' if ov.running else 'false' }};
+  function gb(n) { const g = n / 1073741824; return g < 1 ? Math.round(n / 1048576) + ' MB' : (g < 10 ? g.toFixed(2) : g.toFixed(1)) + ' GB'; }
+  function refresh() {
+    fetch('{{ url_for('models_status') }}').then(r => r.json()).then(s => {
+      if (s.running !== wasRunning) { location.reload(); return; }
+      const eng = document.getElementById('eng-state'); if (eng) eng.textContent = s.running ? 'running · ' + s.version : 'stopped';
+      const lc = document.getElementById('loaded-count'); if (lc) lc.textContent = s.loaded_count + (s.loaded_count === 1 ? ' model' : ' models') + ' loaded now';
+      const df = document.getElementById('disk-free'); if (df && s.disk && s.disk.free_gb != null) df.textContent = s.disk.free_gb + ' GB';
+      const ms = document.getElementById('models-size'); if (ms) ms.textContent = s.models_size_gb + ' GB';
+      (s.models || []).forEach(m => {
+        const cell = document.querySelector('tr[data-model="' + CSS.escape(m.name) + '"] .status'); if (!cell) return;
+        cell.innerHTML = m.loaded ? '<span class="pill on">on · ' + gb(m.memory) + ' in memory</span>' : '<span class="pill off">off · on disk</span>';
+      });
+    }).catch(() => {});
+  }
+  setInterval(refresh, 5000);
+  const modelIn = document.getElementById('pull-model'), checkModel = document.getElementById('check-model');
+  const pullText = document.getElementById('pull-text'), pullBtn = document.getElementById('pull-btn');
+  modelIn.addEventListener('input', () => { checkModel.value = modelIn.value; });
+  pullBtn.addEventListener('click', () => {
+    const model = modelIn.value.trim(); if (!model) return; checkModel.value = model; pullText.textContent = 'starting…';
+    fetch('{{ url_for('ollama_pull') }}', { method: 'POST', body: new URLSearchParams({ model }) }).then(() => {
+      const t = setInterval(() => {
+        fetch('{{ url_for('ollama_pull_status') }}?model=' + encodeURIComponent(model)).then(r => r.json()).then(p => {
+          pullText.textContent = p.error ? 'error: ' + p.error : p.status + (p.done_pct != null ? ' ' + p.done_pct + '%' : '');
+          if (p.finished) { clearInterval(t); if (!p.error) { pullText.textContent = 'got it — it appears above in a moment'; setTimeout(() => location.reload(), 1500); } }
+        }).catch(() => {});
+      }, 2000);
+    }).catch(() => { pullText.textContent = 'could not start the download'; });
+  });
+})();
+</script>
+{% endblock %}

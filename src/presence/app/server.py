@@ -53,6 +53,10 @@ DEFAULT_MODELS = {
     "anthropic": "claude-haiku-4-5-20251001",
     "openai": "gpt-4o-mini",
 }
+SUGGESTED_MODELS = {  # offered on the Models page; any other id can still be typed
+    "anthropic": ["claude-opus-5", "claude-sonnet-5", "claude-haiku-4-5"],
+    "openai": ["gpt-4o-mini"],
+}
 
 
 def _csv(value: str) -> list[str]:
@@ -266,6 +270,31 @@ def create_app(data: Path) -> Flask:
     def _ctx() -> dict[str, Any]:
         return {"data_dir": str(data)}
 
+    @app.template_filter("gb")
+    def _gb_filter(n: Any) -> str:
+        """Bytes the way the page says them: 2.84 GB, 512 MB, or — for nothing."""
+        try:
+            n = float(n or 0)
+        except (TypeError, ValueError):
+            return "—"
+        if n <= 0:
+            return "—"
+        g = n / 2**30
+        if g < 1:
+            return f"{n / 2**20:.0f} MB"
+        return f"{g:.2f} GB" if g < 10 else f"{g:.1f} GB"
+
+    @app.template_filter("ctx")
+    def _ctx_filter(n: Any) -> str:
+        """A context window in thousands of tokens: 40960 → 40k."""
+        return f"{int(n) // 1024}k" if n else "—"
+
+    def _back(default: str = "setup"):
+        """Where a form came from: back=models or back=stories in the form, else Setup."""
+        where = request.form.get("back") or request.args.get("back") or default
+        return redirect(url_for({"models": "models_page",
+                                 "stories": "stories_page"}.get(where, "setup")))
+
     @app.before_request
     def only_this_computer():
         """A page on localhost is still reachable from any site open in the same
@@ -410,7 +439,7 @@ def create_app(data: Path) -> Flask:
         if request.args.get("json"):
             return jsonify({"message": message, "engine": ollama.engine_info()})
         flash(message)
-        return redirect(url_for("setup"))
+        return _back()
 
     @app.post("/ollama/engine/install")
     def ollama_engine_install():
@@ -445,7 +474,7 @@ def create_app(data: Path) -> Flask:
             flash(f"{model} is ready — {detail}; saved as your model")
         else:
             flash(f"{model}: {detail}", "error")
-        return redirect(url_for("setup"))
+        return _back()
 
     @app.post("/model/test")
     def model_test():
@@ -454,14 +483,14 @@ def create_app(data: Path) -> Flask:
         kind, model = cfg["kind"], cfg["model"]
         if not model:
             flash("save a model first, then test it", "error")
-            return redirect(url_for("setup"))
+            return _back()
         who = f"{PROVIDER_NAMES.get(kind, kind)}, {model}"
         if kind == "anthropic":
             from presence.core.providers import AnthropicProvider
 
             ok, detail = probe.tool_check(AnthropicProvider(api_key=cfg["api_key"]), model)
             flash(f"{who}: {detail}", "message" if ok else "error")
-            return redirect(url_for("setup"))
+            return _back()
         base = (f"{cfg['base_url']}/v1" if kind == "local"
                 else cfg["base_url"] or "https://api.openai.com/v1")
         found = probe.probe(base, model, cfg["api_key"] or "unused", hints=kind != "openai")
@@ -475,7 +504,110 @@ def create_app(data: Path) -> Flask:
         good = ok and found["tools"] == "native" and found["json"] != "prompt"
         flash(f"{who}: {probe.describe(found)} · {detail}. {found['advice']}",
               "message" if good else "error")
-        return redirect(url_for("setup"))
+        return _back()
+
+    # ------------------------------------------------ the Models page
+
+    def _models_context() -> dict[str, Any]:
+        cfg = read_yaml(data / "presence.yaml")
+        sec = read_secrets(data)
+        providers = cfg.get("providers") or {}
+        cur = modelcfg.current(data)
+        ov = ollama.overview()
+        endpoint_url = str((providers.get("endpoint") or {}).get("base_url") or "").strip()
+        offered = (probe.list_models(endpoint_url, sec.get("ENDPOINT_API_KEY") or "unused",
+                                     timeout=1.5) if endpoint_url else None)
+        return {
+            "page": "models", "ov": ov, "current": cur,
+            "current_ready": model_ready(cur["kind"], cur["model"], cur["base_url"] or "", sec,
+                                         api_key=cur["api_key"] or ""),
+            "current_row": next((m for m in ov["models"] if m["name"] == cur["model"]), None),
+            "provider_names": PROVIDER_NAMES, "suggested": SUGGESTED_MODELS,
+            "keys": {k: bool(sec.get(v)) for k, v in modelcfg.SECRET_NAMES.items()},
+            "endpoint_url": endpoint_url, "endpoint_models": offered,
+        }
+
+    @app.get("/models")
+    def models_page():
+        return render_template("models.html", **_models_context())
+
+    @app.get("/models/status")
+    def models_status():
+        return jsonify(ollama.overview())
+
+    @app.post("/models/use")
+    def models_use():
+        """Make one of the models on this page the one Presence thinks with."""
+        kind = request.form.get("kind", "")
+        model = request.form.get("model", "").strip()
+        if kind == "local":
+            if not model:
+                flash("choose a model first", "error")
+                return _back("models")
+            _save_local_model(model)
+            flash(f"{model} is now your model — it runs on this computer")
+            return _back("models")
+        cfg = read_yaml(data / "presence.yaml")
+        providers = cfg.get("providers") or {}
+        cfg["providers"] = providers
+        if kind in ("anthropic", "openai"):
+            secret = modelcfg.SECRET_NAMES[kind]
+            if not read_secrets(data).get(secret):
+                flash(f"save an API key for {PROVIDER_NAMES[kind]} in Setup, step 3, first",
+                      "error")
+                return _back("models")
+            providers[kind] = {"kind": "anthropic" if kind == "anthropic" else "openai-compatible",
+                               "api_key_secret": secret}
+            model = model or DEFAULT_MODELS[kind]
+        elif kind == "endpoint":
+            if not (providers.get("endpoint") or {}).get("base_url"):
+                flash("add your server's address in Setup, step 3, first", "error")
+                return _back("models")
+            if not model:
+                flash("pick one of the models your server offers", "error")
+                return _back("models")
+        else:
+            flash("choose a provider from the list", "error")
+            return _back("models")
+        _point_agents(cfg, kind, model)
+        cfg.setdefault("budget_tokens_per_day", 200_000)
+        write_yaml(data / "presence.yaml", cfg)
+        flash(f"model saved — {PROVIDER_NAMES.get(kind, kind)}, {model}")
+        return _back("models")
+
+    @app.post("/models/load")
+    def models_load():
+        model = request.form.get("model", "").strip()
+        ok, detail = ollama.load_model(model)
+        flash(f"{model} is on — it stays in memory until you turn it off" if ok
+              else f"{model}: {detail}", "message" if ok else "error")
+        return _back("models")
+
+    @app.post("/models/unload")
+    def models_unload():
+        model = request.form.get("model", "").strip()
+        ok, detail = ollama.unload_model(model)
+        flash(f"{model} is off — its memory is free" if ok else f"{model}: {detail}",
+              "message" if ok else "error")
+        return _back("models")
+
+    @app.post("/models/remove")
+    def models_remove():
+        model = request.form.get("model", "").strip()
+        ok, detail = ollama.delete_model(model)
+        if not ok:
+            flash(f"{model}: {detail}", "error")
+            return _back("models")
+        cur = modelcfg.current(data)
+        was_mine = cur["kind"] == "local" and cur["model"] == model
+        flash(f"{model} removed from this computer"
+              + (" — it was your model, so pick another" if was_mine else ""))
+        return _back("models")
+
+    @app.post("/ollama/stop")
+    def ollama_stop():
+        flash(ollama.stop())
+        return _back("models")
 
     @app.post("/setup/telegram")
     def setup_telegram():
@@ -882,10 +1014,31 @@ def create_app(data: Path) -> Flask:
         mime = "application/pdf" if path.suffix == ".pdf" else "text/plain"
         return send_file(path, mimetype=mime, max_age=0)
 
-    # ------------------------------------------------ the stories bank (setup, step 1)
+    # ------------------------------------------------ the stories bank (its own page)
 
     def _tags(raw: str) -> list[str]:
         return [t.strip() for t in (raw or "").split(",") if t.strip()]
+
+    @app.get("/stories")
+    def stories_page():
+        bank = stories.list_stories(data)
+        tag = request.args.get("tag", "").strip()
+        labels = {c["id"]: c.get("label", "") for c in cvs.list_cvs(data)}
+
+        def origin(s: dict[str, Any]) -> str:
+            src = str(s.get("source") or "")
+            if src.startswith("cv:"):
+                label = labels.get(src[3:], "")
+                return "from your CV" + (f" · {label}" if label else "")
+            return "from a message session" if s.get("job_id") else "typed by you"
+
+        bank = [{**s, "origin": origin(s)} for s in bank]
+        kept = [s for s in bank if s["confirmed"]]
+        return render_template(
+            "stories.html", page="stories", tag=tag,
+            drafts=[s for s in bank if not s["confirmed"]], kept=kept,
+            shown=[s for s in kept if not tag or tag in s["tags"]],
+            tags=sorted({t for s in kept for t in s["tags"]}, key=str.lower))
 
     @app.post("/stories/add")
     def story_add():
@@ -894,7 +1047,7 @@ def create_app(data: Path) -> Flask:
             flash("story added — Presence may draw on it")
         except ValueError:
             flash("write the story first", "error")
-        return redirect(url_for("setup"))
+        return _back("stories")
 
     @app.post("/stories/<sid>/confirm")
     def story_confirm(sid: str):
@@ -902,7 +1055,7 @@ def create_app(data: Path) -> Flask:
             flash("kept — Presence may draw on it")
         else:
             flash("that story is not in your bank", "error")
-        return redirect(url_for("setup"))
+        return _back("stories")
 
     @app.post("/stories/<sid>/update")
     def story_update(sid: str):
@@ -910,14 +1063,14 @@ def create_app(data: Path) -> Flask:
                             tags=_tags(request.form.get("tags")), confirmed=True)
         flash("story updated and kept" if ok else "that story is not in your bank",
               "message" if ok else "error")
-        return redirect(url_for("setup"))
+        return _back("stories")
 
     @app.post("/stories/<sid>/remove")
     def story_remove(sid: str):
         ok = stories.remove(data, sid)
         flash("story removed" if ok else "that story is not in your bank",
               "message" if ok else "error")
-        return redirect(url_for("setup"))
+        return _back("stories")
 
     @app.post("/setup/profile")
     def setup_profile():

@@ -1,0 +1,40 @@
+{% extends "base.html" %}{% block content %}
+{% macro card(s) %}<div class="storycard">
+  <div class="txt">{{ s.text }}</div>
+  <div class="meta">{% for t in s.tags %}<span class="pill" style="font-size:11px;padding:1px 7px">{{ t }}</span> {% endfor %}{% if s.confirmed %}<span class="pill on">kept</span>{% else %}<span class="pill off">from your CV — keep?</span>{% endif %}<span>{% if s.job_id %}<a href="{{ url_for('session_page', job_id=s.job_id) }}">{{ s.origin }}</a>{% else %}{{ s.origin }}{% endif %}{% if s.created %} · {{ s.created[:10] }}{% endif %}</span></div>
+  {% if not s.confirmed %}<form method="post" action="{{ url_for('story_confirm', sid=s.id) }}"><button class="small">Keep</button></form> {% endif %}<form method="post" action="{{ url_for('story_remove', sid=s.id) }}"><button class="danger small">Remove</button></form>
+  <details><summary style="cursor:pointer;font-size:13px">Edit</summary>
+    <form method="post" action="{{ url_for('story_update', sid=s.id) }}" class="stack" style="margin:6px 0 0;display:flex;max-width:640px">
+      <textarea name="text" aria-label="story" style="min-height:64px">{{ s.text }}</textarea>
+      <input type="text" name="tags" value="{{ s.tags|join(', ') }}" placeholder="tags, comma-separated" aria-label="tags">
+      <div><button class="small">Save</button> <span class="hint" style="display:inline;margin:0">saving keeps it</span></div>
+    </form>
+  </details>
+</div>{% endmacro %}
+<h1>Your stories</h1>
+<p class="lede">Things you have done, in your own words. Presence draws on them when it writes with you and offers them in a message session. Nothing unconfirmed is ever used.</p>
+<p class="dataflow">Kept in <span class="mono">stories.json</span> in your data folder <span class="where local" title="Kept on this computer. It leaves only if you send it somewhere yourself."><svg class="plant"><use href="#plant-local"/></svg>on this computer</span>. A story leaves only inside a message you send yourself.</p>
+<div class="split">
+<div class="main">
+{% if drafts %}<section class="step todo"><h2>To review<span class="need req">{{ drafts|length }} from your CV</span></h2>
+<p class="hint">Presence drafted these from your CV. Keep the true ones, fix the wording, or remove the rest.</p>
+{% for s in drafts|reverse %}{{ card(s) }}{% endfor %}
+</section>{% endif %}
+<section class="step"><h2>Kept<span class="need set">{{ kept|length }}</span></h2>
+{% if tags %}<div class="tagbar"><a class="{{ 'on' if not tag }}" href="{{ url_for('stories_page') }}">all</a>{% for t in tags %}<a class="{{ 'on' if t == tag }}" href="{{ url_for('stories_page', tag=t) }}">{{ t }}</a>{% endfor %}</div>{% endif %}
+{% for s in shown|reverse %}{{ card(s) }}{% endfor %}
+{% if not kept %}<p class="hint" style="margin:0">No stories yet. Add one on the right — or read a CV properly with the model in Setup, step 1, and Presence drafts some for you to check.</p>{% elif not shown %}<p class="hint" style="margin:0">Nothing kept under “{{ tag }}”.</p>{% endif %}
+</section>
+</div>
+<aside>
+<div class="cvbox"><h3>Add a story</h3>
+<form method="post" action="{{ url_for('story_add') }}" class="stack">
+  <label>What you did, in a sentence or two<textarea name="text" placeholder="e.g. Rebuilt the monthly reporting pack and cut the turnaround from 3 days to 1."></textarea></label>
+  <label>Tags (optional, comma-separated)<input type="text" name="tags" placeholder="e.g. reporting, Excel"></label>
+  <div><button>Add this story</button></div>
+</form></div>
+<div class="cvbox" style="margin-top:14px"><h3>Where they come from</h3>
+<p class="hint" style="margin:0">Three ways: you type one here; you save an answer during a message session on the Tracker page; or Presence drafts some from a proper CV read, for you to check.</p></div>
+</aside>
+</div>
+{% endblock %}

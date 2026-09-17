@@ -152,3 +152,29 @@ textarea.draft { width: 100%; min-height: 220px; font: inherit; line-height: 1.5
 .why-row:first-of-type { border-top: 0; }
 .why-row .source { color: var(--leaf); font-size: 12.5px; margin-top: 2px; }
 td a.prep { display: inline-block; margin-top: 4px; font-size: 12.5px; color: var(--leaf); }
+
+/* the stories page and the models page */
+a.button { display: inline-block; padding: 6px 12px; border: 1px solid var(--leaf); color: var(--leaf); background: #fff; text-decoration: none; font-weight: 700; font-size: 13px; }
+.tagbar { display: flex; flex-wrap: wrap; gap: 6px; margin: 0 0 10px; }
+.tagbar a { font-size: 12px; padding: 2px 9px; border: 1px solid var(--stone); color: var(--muted); text-decoration: none; }
+.tagbar a.on { border-color: var(--leaf); color: var(--leaf); background: #e3eee6; }
+.storycard { padding: 10px 0; border-top: 1px solid #e3e6e0; }
+.storycard:first-of-type { border-top: 0; }
+.storycard .meta { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; font-size: 12px; color: var(--muted); margin: 4px 0 6px; }
+.storycard .meta a { color: var(--leaf); }
+.storycard form { display: inline; }
+.storycard details { margin-top: 6px; }
+.statgrid { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 12px; margin: 0 0 12px; }
+.stat { display: flex; flex-direction: column; gap: 2px; min-width: 0; padding: 10px 12px; border: 1px solid var(--stone); background: var(--paper); }
+.stat .k { font-family: "IBM Plex Mono", Menlo, monospace; font-size: 11px; letter-spacing: .1em; text-transform: uppercase; color: var(--muted); }
+.stat .v { font-size: 20px; font-weight: 700; }
+.stat .k2 { font-size: 12px; color: var(--muted); overflow-wrap: anywhere; }
+.stat.warn .v { color: #8a5a12; }
+table.models td.actions { white-space: nowrap; }
+table.models td.actions form { display: inline; margin-right: 4px; }
+table.models tr.inuse td { background: #f4f8f2; }
+table.models details { display: inline-block; }
+table.models details summary { font-size: 12px; color: #a33; margin: 0; }
+.cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 14px; }
+.card { border: 1px solid var(--stone); background: var(--paper); padding: 12px 14px; }
+.card h3 { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; margin: 0 0 6px; }
