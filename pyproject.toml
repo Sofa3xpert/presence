@@ -1,6 +1,6 @@
 [project]
 name = "presence"
-version = "0.1.0"
+version = "0.1.1"
 description = "A job-search companion you run yourself — local-first, messenger-native, free forever."
 readme = "README.md"
 requires-python = ">=3.12"

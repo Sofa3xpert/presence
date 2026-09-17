@@ -4,4 +4,4 @@ Local-first, messenger-native, free forever. See CHARTER.md for the four
 rules this codebase enforces.
 """
 
-__version__ = "0.1.0"
+__version__ = "0.1.1"
