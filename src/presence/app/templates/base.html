@@ -6,7 +6,7 @@
 <body>
 <header>
   <div class="brand"><svg width="30" height="30" viewBox="0 0 84 84" aria-hidden="true"><path d="M22 14 H12 V70 H22" fill="none" stroke="#2a2622" stroke-width="5" stroke-linecap="square"></path><path d="M62 14 H72 V70 H62" fill="none" stroke="#2a2622" stroke-width="5" stroke-linecap="square"></path><path d="M42 66 V38" stroke="#2f6b4f" stroke-width="5" stroke-linecap="round" fill="none"></path><path d="M42 42 C42 30 52 26 60 28 C60 40 50 44 42 42 Z" fill="#2f6b4f"></path><path d="M42 48 C40 40 32 38 26 40 C28 48 36 50 42 48 Z" fill="#9bc53d"></path></svg>presence</div>
-  <nav><a href="{{ url_for('setup') }}" class="{{ 'active' if page == 'setup' else '' }}">Setup</a><a href="{{ url_for('tracker_page') }}" class="{{ 'active' if page == 'tracker' else '' }}">Tracker</a><a href="{{ url_for('run_page') }}" class="{{ 'active' if page == 'run' else '' }}">Run</a></nav>
+  <nav><a href="{{ url_for('setup') }}" class="{{ 'active' if page == 'setup' else '' }}">Setup</a><a href="{{ url_for('tracker_page') }}" class="{{ 'active' if page == 'tracker' else '' }}">Tracker</a><a href="{{ url_for('run_page') }}" class="{{ 'active' if page == 'run' else '' }}">Run</a><a href="{{ url_for('student_plan') }}" class="{{ 'active' if page == 'student' else '' }}">Student</a></nav>
   <form method="post" action="{{ url_for('data_open') }}" class="folder" title="{{ data_dir }}"><input type="hidden" name="back" value="{{ request.path }}"><span class="tag">stored on this computer</span> <button class="link">Open data folder</button></form>
 </header>
 <main>
