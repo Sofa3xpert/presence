@@ -22,7 +22,7 @@ Job seekers and students are exactly the people who can't spend $40/month on
 "career copilots" — so everything essential in Presence is free, forever, with
 no tiers and no subscription. It runs on your machine, with your own model key
 — or fully free end-to-end with a local model via Ollama. If Presence helps
-you land somewhere, there's a sponsor button. That's the whole business model.
+you land somewhere, there's a sponsor button (Soon). That's the whole business model.
 
 ## The charter
 
