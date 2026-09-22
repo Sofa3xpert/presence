@@ -38,7 +38,8 @@ def test_current_passes_the_own_server_address_through_verbatim(tmp_path):
         "agents": {"scout": {"provider": "endpoint", "model": "qwen3"}},
     })
     cfg = modelcfg.current(tmp_path)
-    assert cfg == {"kind": "endpoint", "model": "qwen3", "base_url": OWN, "api_key": "unused"}
+    assert cfg == {"kind": "endpoint", "provider": "endpoint", "model": "qwen3",
+                   "base_url": OWN, "api_key": "unused"}
     write_secret(tmp_path, "ENDPOINT_API_KEY", "tok")
     assert modelcfg.current(tmp_path)["api_key"] == "tok"
     # a local provider that was pointed at LM Studio the old way keeps that address too
@@ -54,7 +55,7 @@ def test_current_passes_the_own_server_address_through_verbatim(tmp_path):
                                 "base_url": "http://localhost:11434/v1"}},
         "agents": {"scout": {"provider": "local", "model": "m"}},
     })
-    assert modelcfg.current(tmp_path) == {"kind": "local", "model": "m",
+    assert modelcfg.current(tmp_path) == {"kind": "local", "provider": "local", "model": "m",
                                           "base_url": ollama.resolve_base_url(),
                                           "api_key": ""}
 

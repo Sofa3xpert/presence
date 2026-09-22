@@ -83,13 +83,14 @@ def current(data: Path) -> dict[str, Any]:
     kind = derive_kind(pname, pcfg)
     model = scout.get("model", "")
     if kind == "local":
-        return {"kind": kind, "model": model, "base_url": ollama.resolve_base_url(),
-                "api_key": ""}
+        return {"kind": kind, "provider": pname, "model": model,
+                "base_url": ollama.resolve_base_url(), "api_key": ""}
     secret = pcfg.get("api_key_secret") or SECRET_NAMES[kind]
     if kind == "endpoint":  # the address exactly as the person gave it
-        return {"kind": kind, "model": model, "base_url": str(pcfg.get("base_url")).strip(),
+        return {"kind": kind, "provider": pname, "model": model,
+                "base_url": str(pcfg.get("base_url")).strip(),
                 "api_key": sec.get(secret, "") or "unused"}
-    return {"kind": kind, "model": model,
+    return {"kind": kind, "provider": pname, "model": model,
             "base_url": (pcfg.get("base_url") or None) if kind == "openai" else None,
             "api_key": sec.get(secret, "")}
 

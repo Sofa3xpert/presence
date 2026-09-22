@@ -498,7 +498,8 @@ def create_app(data: Path) -> Flask:
         if not model:
             flash("save a model first, then test it", "error")
             return _back()
-        who = f"{PROVIDER_NAMES.get(kind, kind)}, {model}"
+        label = PROVIDER_NAMES.get(cfg.get("provider") or kind) or PROVIDER_NAMES.get(kind, kind)
+        who = f"{label}, {model}"
         if kind == "anthropic":
             from presence.core.providers import AnthropicProvider
 
