@@ -263,7 +263,7 @@
 })();
 </script>
 <form method="post" action="{{ url_for('setup_model') }}">
-  <label>Provider<select name="kind" id="model-kind"><option value="local" {{ 'selected' if state.model.kind == 'local' }}>Local — on this machine</option><option value="endpoint" {{ 'selected' if state.model.kind == 'endpoint' }}>Your own server (vLLM, llama.cpp, LM Studio, and others)</option><option value="anthropic" {{ 'selected' if state.model.kind == 'anthropic' }}>Anthropic (API key)</option><option value="openai" {{ 'selected' if state.model.kind == 'openai' }}>OpenAI (API key)</option></select></label>
+  <label>Provider<select name="kind" id="model-kind"><option value="local" {{ 'selected' if state.model.kind == 'local' }}>Local — on this machine</option><option value="endpoint" {{ 'selected' if state.model.kind == 'endpoint' }}>Your own server (vLLM, llama.cpp, LM Studio, and others)</option><option value="anthropic" {{ 'selected' if state.model.kind == 'anthropic' }}>Anthropic (API key)</option><option value="openai" {{ 'selected' if state.model.kind == 'openai' }}>OpenAI (API key)</option><option value="nim" {{ 'selected' if state.model.kind == 'nim' }}>NVIDIA NIM (your own container, or build.nvidia.com)</option></select></label>
   <label>Model name<input type="text" name="model" value="{{ state.model.model }}" placeholder="nemotron-3-nano:4b"></label>
   <label>Server address (ends with /v1)<input type="url" name="base_url" value="{{ state.model.base_url }}" placeholder="http://localhost:8000/v1"></label>
   <label>API key (if the service or server asks for one)<input type="password" name="api_key" placeholder="{{ 'saved' if state.model.has_key else 'sk-…' }}"></label>

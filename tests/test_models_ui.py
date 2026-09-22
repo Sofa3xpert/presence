@@ -2,8 +2,11 @@
 
 import json
 
+import fake_openai
+
 from presence.app import modelcfg, ollama, server
-from presence.app.config_io import read_yaml, write_secret, write_yaml
+from presence.app.config_io import read_secrets, read_yaml, write_secret, write_yaml
+from presence.core import structured
 
 
 class R:
@@ -318,3 +321,55 @@ def test_models_on_off_remove_and_engine_routes(tmp_path, monkeypatch):
     r = c.post("/ollama/check", data={"model": "qwen3.5:9b", "back": "models"},
                follow_redirects=True)
     assert r.request.path == "/models" and b"is ready" in r.data
+
+
+def test_nim_preset_saved_from_setup(tmp_path):
+    """Setup step 3 with the NIM provider: no address means a container on this
+    computer, and NVIDIA's own endpoint refuses to be saved without a key."""
+    app = server.create_app(tmp_path)
+    c = app.test_client()
+
+    model = "nvidia/nemotron-3-nano-omni-30b-a3b-reasoning"
+    c.post("/setup/model", data={"kind": "nim", "model": model}, follow_redirects=True)
+    cfg = read_yaml(tmp_path / "presence.yaml")
+    assert cfg["providers"]["nim"]["base_url"] == modelcfg.NIM_LOCAL
+    assert cfg["providers"]["nim"]["api_key_secret"] == "NVIDIA_API_KEY"
+    assert cfg["agents"]["scout"]["provider"] == "nim"
+
+    page = c.post("/setup/model",
+                  data={"kind": "nim", "model": "x", "base_url": modelcfg.NIM_HOSTED},
+                  follow_redirects=True).get_data(as_text=True)
+    assert "build.nvidia.com" in page
+    saved = read_yaml(tmp_path / "presence.yaml")["providers"]["nim"]
+    assert saved["base_url"] == modelcfg.NIM_LOCAL
+
+    c.post("/setup/model", data={"kind": "nim", "model": "m", "base_url": modelcfg.NIM_HOSTED,
+                                 "api_key": "nvapi-test"}, follow_redirects=True)
+    cfg = read_yaml(tmp_path / "presence.yaml")
+    assert cfg["providers"]["nim"]["base_url"] == modelcfg.NIM_HOSTED
+    assert read_secrets(tmp_path)["NVIDIA_API_KEY"] == "nvapi-test"
+
+
+def test_nim_reaches_the_transport_as_an_endpoint(tmp_path, monkeypatch):
+    """A saved NIM provider is an OpenAI-compatible endpoint: nested json_schema,
+    the answer-directly switches, and the address the person gave."""
+    app = server.create_app(tmp_path)
+    app.test_client().post(
+        "/setup/model",
+        data={"kind": "nim", "model": "nvidia/nemotron-3-nano-omni-30b-a3b-reasoning",
+              "base_url": modelcfg.NIM_HOSTED, "api_key": "nvapi-test"},
+        follow_redirects=True)
+    cur = modelcfg.current(tmp_path)
+    assert cur["kind"] == "endpoint" and cur["api_key"] == "nvapi-test"
+
+    fake = fake_openai.install(monkeypatch, fake_openai.reply('{"ok": true}'))
+    out = structured.ask_json(cur["kind"], cur["model"], "s", "p",
+                              {"type": "object", "properties": {"ok": {"type": "boolean"}}},
+                              base_url=cur["base_url"], api_key=cur["api_key"])
+    assert out == {"ok": True}
+    assert fake["base_url"] == modelcfg.NIM_HOSTED
+    assert fake["api_key"] == "nvapi-test"
+    call = fake["calls"][-1]
+    assert call["response_format"]["type"] == "json_schema"
+    assert "schema" in call["response_format"]["json_schema"]
+    assert call["extra_body"] == structured.THINK_OFF

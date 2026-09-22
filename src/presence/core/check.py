@@ -34,6 +34,16 @@ PRESETS: dict[str, dict[str, str | None]] = {
         "key_env": None,
         "base_url": "http://localhost:1234/v1",
     },
+    "nim": {   # NVIDIA's hosted endpoint: a free key from build.nvidia.com
+        "kind": "openai-compatible",
+        "key_env": "NVIDIA_API_KEY",
+        "base_url": "https://integrate.api.nvidia.com/v1",
+    },
+    "nim-local": {   # a NIM container you run yourself: no key
+        "kind": "openai-compatible",
+        "key_env": None,
+        "base_url": "http://localhost:8000/v1",
+    },
 }
 
 

@@ -140,12 +140,14 @@ def fingerprint(base_url: str, models_body: Any = None, api_key: str = "unused")
             if isinstance(m, dict):
                 owners.add(str(m.get("owned_by", "")).lower())
     for owner, name in (("vllm", "vLLM"), ("llamacpp", "llama.cpp"), ("library", "Ollama"),
-                        ("organization_owner", "LM Studio")):
+                        ("organization_owner", "LM Studio"), ("nvidia", "NVIDIA NIM"),
+                        ("system", "NVIDIA NIM")):
         if owner in owners:
             return name
     root = base_url.rstrip("/").removesuffix("/v1").rstrip("/")
     for path, name, key in (("/props", "llama.cpp", None), ("/api/tags", "Ollama", "models"),
                             ("/api/v0/models", "LM Studio", "data"),
+                            ("/v1/health/ready", "NVIDIA NIM", None),
                             ("/version", "vLLM", "version")):
         status, body = _get_json(root + path, api_key, timeout=3)
         if status == 200 and isinstance(body, dict) and (key is None or key in body):

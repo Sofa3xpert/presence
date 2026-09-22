@@ -21,6 +21,7 @@ SECRET_NAMES = {
     "anthropic": "ANTHROPIC_API_KEY",
     "openai": "OPENAI_API_KEY",
     "endpoint": "ENDPOINT_API_KEY",
+    "nim": "NVIDIA_API_KEY",
 }
 LOOPBACK = frozenset({"127.0.0.1", "localhost", "::1"})
 
@@ -39,6 +40,15 @@ def _ollama_ports() -> set[int]:
             pass
     ports.discard(0)
     return ports
+
+
+NIM_HOSTED = "https://integrate.api.nvidia.com/v1"
+NIM_LOCAL = "http://localhost:8000/v1"
+
+
+def is_nim_hosted(base_url: str | None) -> bool:
+    """NVIDIA's own endpoint, which needs a key; a NIM container you run does not."""
+    return str(base_url or "").strip().rstrip("/").startswith(NIM_HOSTED)
 
 
 def is_ollama_url(base_url: str | None) -> bool:
@@ -61,7 +71,7 @@ def derive_kind(pname: str, pcfg: dict[str, Any]) -> str:
         return "local" if is_ollama_url(base_url) else "endpoint"
     if pname == "openai" or not base_url:
         return "openai"
-    return "endpoint"
+    return "endpoint"   # nim included: an address plus a key is an endpoint
 
 
 def current(data: Path) -> dict[str, Any]:

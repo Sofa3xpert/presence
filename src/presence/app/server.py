@@ -52,10 +52,13 @@ DEFAULT_MODELS = {
     "local": "nemotron-3-nano:4b",
     "anthropic": "claude-haiku-4-5-20251001",
     "openai": "gpt-4o-mini",
+    "nim": "nvidia/nemotron-3-nano-omni-30b-a3b-reasoning",
 }
 SUGGESTED_MODELS = {  # offered on the Models page; any other id can still be typed
     "anthropic": ["claude-opus-5", "claude-sonnet-5", "claude-haiku-4-5"],
     "openai": ["gpt-4o-mini"],
+    "nim": ["nvidia/nemotron-3-nano-omni-30b-a3b-reasoning",
+            "nvidia/nemotron-3-super-120b-a12b"],
 }
 
 
@@ -86,7 +89,7 @@ def _bot(data: Path) -> dict[str, Any]:
 
 
 PROVIDER_NAMES = {"local": "on this computer", "anthropic": "Anthropic", "openai": "OpenAI",
-                  "endpoint": "your own server"}
+                  "endpoint": "your own server", "nim": "NVIDIA NIM"}
 MODEL_CACHE_SECONDS = 4.0
 _model_cache: dict[str, Any] = {"key": None, "at": 0.0, "value": False}
 
@@ -383,6 +386,17 @@ def create_app(data: Path) -> Flask:
                 write_secret(data, "ENDPOINT_API_KEY", key)
             providers["endpoint"] = {"kind": "openai-compatible", "base_url": base_url,
                                      "api_key_secret": "ENDPOINT_API_KEY"}
+        elif kind == "nim":
+            base_url = base_url or modelcfg.NIM_LOCAL
+            if key:
+                write_secret(data, modelcfg.SECRET_NAMES["nim"], key)
+            elif (modelcfg.is_nim_hosted(base_url)
+                  and not read_secrets(data).get(modelcfg.SECRET_NAMES["nim"])):
+                flash("NVIDIA's own endpoint needs an API key from build.nvidia.com; "
+                      "a NIM you run yourself does not", "error")
+                return redirect(url_for("setup"))
+            providers["nim"] = {"kind": "openai-compatible", "base_url": base_url,
+                                "api_key_secret": modelcfg.SECRET_NAMES["nim"]}
         elif kind in ("anthropic", "openai"):
             secret = modelcfg.SECRET_NAMES[kind]
             if key:
@@ -517,11 +531,17 @@ def create_app(data: Path) -> Flask:
         endpoint_url = str((providers.get("endpoint") or {}).get("base_url") or "").strip()
         offered = (probe.list_models(endpoint_url, sec.get("ENDPOINT_API_KEY") or "unused",
                                      timeout=1.5) if endpoint_url else None)
+        nim_url = str((providers.get("nim") or {}).get("base_url") or "").strip()
+        nim_models = (probe.list_models(nim_url, sec.get("NVIDIA_API_KEY") or "unused",
+                                        timeout=2.5) if nim_url else None)
+        if nim_models and len(nim_models) > 12:   # the hosted catalogue lists dozens
+            nim_models = [m for m in nim_models if "nemotron" in m.lower()][:12] or nim_models[:12]
         return {
             "page": "models", "ov": ov, "current": cur,
             "current_ready": model_ready(cur["kind"], cur["model"], cur["base_url"] or "", sec,
                                          api_key=cur["api_key"] or ""),
             "current_row": next((m for m in ov["models"] if m["name"] == cur["model"]), None),
+            "nim_url": nim_url, "nim_models": nim_models,
             "provider_names": PROVIDER_NAMES, "suggested": SUGGESTED_MODELS,
             "keys": {k: bool(sec.get(v)) for k, v in modelcfg.SECRET_NAMES.items()},
             "endpoint_url": endpoint_url, "endpoint_models": offered,
@@ -566,6 +586,17 @@ def create_app(data: Path) -> Flask:
             if not model:
                 flash("pick one of the models your server offers", "error")
                 return _back("models")
+        elif kind == "nim":
+            secret = modelcfg.SECRET_NAMES["nim"]
+            base_url = str((providers.get("nim") or {}).get("base_url") or "").strip()
+            base_url = base_url or modelcfg.NIM_HOSTED
+            if modelcfg.is_nim_hosted(base_url) and not read_secrets(data).get(secret):
+                flash("save an NVIDIA API key in Setup, step 3, first — "
+                      "get one free at build.nvidia.com", "error")
+                return _back("models")
+            providers["nim"] = {"kind": "openai-compatible", "base_url": base_url,
+                                "api_key_secret": secret}
+            model = model or DEFAULT_MODELS["nim"]
         else:
             flash("choose a provider from the list", "error")
             return _back("models")
