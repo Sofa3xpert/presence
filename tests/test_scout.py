@@ -1,9 +1,7 @@
 """Tests for the Opportunity Scout agent and RSS connector."""
 
+import xml.etree.ElementTree as ET
 from datetime import date
-from pathlib import Path
-
-import pytest
 
 from presence.agents.scout import (
     Opportunity,
@@ -12,7 +10,12 @@ from presence.agents.scout import (
     compose_scout_digest,
     matches_scout,
 )
-
+from presence.connectors.rss import (
+    _guess_kind,
+    _parse_atom_entries,
+    _parse_date,
+    _parse_rss_items,
+)
 
 # --- Opportunity model ---
 
@@ -119,14 +122,6 @@ def test_digest_deadline_today():
 
 
 # --- RSS connector ---
-
-from presence.connectors.rss import (
-    _guess_kind,
-    _parse_date,
-    _parse_rss_items,
-    _parse_atom_entries,
-)
-import xml.etree.ElementTree as ET
 
 
 def test_guess_kind():

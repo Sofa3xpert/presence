@@ -13,7 +13,6 @@ import re
 import uuid
 from datetime import datetime
 from pathlib import Path
-from typing import Any
 
 from pydantic import BaseModel
 
@@ -81,8 +80,8 @@ def upload_url(url: str, cal_dir: Path, data_dir: Path | None = None) -> UploadR
 
     If data_dir is provided, also registers the URL for auto-refresh.
     """
-    import urllib.request
     import urllib.error
+    import urllib.request
 
     url = url.strip()
     if not url.startswith(("http://", "https://")):
@@ -233,8 +232,8 @@ def upload_pdf(pdf_bytes: bytes, filename: str, cal_dir: Path,
     # Build a provider from app config
     try:
         from presence.core.config import load_app
-        from presence.core.secrets import get_secret
         from presence.core.providers import AnthropicProvider, OpenAICompatProvider
+        from presence.core.secrets import get_secret
 
         app_cfg = load_app(data_dir)
     except Exception:
@@ -285,8 +284,10 @@ def upload_pdf(pdf_bytes: bytes, filename: str, cal_dir: Path,
     try:
         parsed = json.loads(raw)
     except json.JSONDecodeError:
-        return UploadResult(ok=False,
-                            message="The model returned invalid JSON. Try again or use a .ics file.")
+        return UploadResult(
+            ok=False,
+            message="The model returned invalid JSON. Try again or use a .ics file.",
+        )
 
     if not isinstance(parsed, list) or not parsed:
         return UploadResult(ok=False,

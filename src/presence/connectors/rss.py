@@ -17,7 +17,6 @@ import logging
 import xml.etree.ElementTree as ET
 from datetime import date, datetime
 from email.utils import parsedate_to_datetime
-from typing import Any
 
 import requests
 

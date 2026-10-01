@@ -15,7 +15,6 @@ from presence.connectors.ical import (
     deadlines_in_range,
     events_for_date,
     load_all_ics,
-    upcoming_events,
 )
 
 log = logging.getLogger("presence.student_brief")

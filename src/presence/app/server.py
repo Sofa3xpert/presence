@@ -3,7 +3,6 @@ never leaves this machine, and neither does this page."""
 
 from __future__ import annotations
 
-import base64
 import csv
 import io
 import json
@@ -1491,8 +1490,8 @@ def create_app(data: Path) -> Flask:
 
     @app.get("/student")
     def student_plan():
-        from presence.connectors.ical import load_all_ics, events_for_date, upcoming_events
         from presence.connectors.cal_feeds import list_feeds
+        from presence.connectors.ical import events_for_date, load_all_ics
         plan_file = data / "student_plan.json"
         plan = json.loads(plan_file.read_text()) if plan_file.exists() else {}
         cal_dir = data / "calendars"
@@ -1530,7 +1529,9 @@ def create_app(data: Path) -> Flask:
     @app.post("/student/upload")
     def student_upload():
         from presence.connectors.schedule_upload import (
-            upload_ics_file, upload_url, upload_pdf,
+            upload_ics_file,
+            upload_pdf,
+            upload_url,
         )
         cal_dir = data / "calendars"
 

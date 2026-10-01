@@ -12,7 +12,7 @@ import email.utils
 import imaplib
 import logging
 import re
-from datetime import date, datetime, timedelta, timezone
+from datetime import UTC, date, datetime, timedelta
 from pathlib import Path
 from typing import Any
 
@@ -39,8 +39,8 @@ class EmailMessage(BaseModel):
 
     @property
     def age_hours(self) -> float:
-        now = datetime.now(tz=timezone.utc)
-        dt = self.date if self.date.tzinfo else self.date.replace(tzinfo=timezone.utc)
+        now = datetime.now(tz=UTC)
+        dt = self.date if self.date.tzinfo else self.date.replace(tzinfo=UTC)
         return max(0, (now - dt).total_seconds() / 3600)
 
     def __str__(self) -> str:
@@ -111,7 +111,7 @@ def _parse_date(msg: email.message.Message) -> datetime:
     """Parse the Date header into a datetime."""
     raw = msg.get("Date", "")
     parsed = email.utils.parsedate_to_datetime(raw) if raw else None
-    return parsed or datetime.now(tz=timezone.utc)
+    return parsed or datetime.now(tz=UTC)
 
 
 def _snippet(text: str, max_len: int = 200) -> str:

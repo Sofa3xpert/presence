@@ -1,7 +1,6 @@
 """Tests for the IMAP email connector."""
 
-from datetime import datetime, timezone
-from pathlib import Path
+from datetime import UTC, datetime
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -17,7 +16,6 @@ from presence.connectors.imap import (
     load_email_config,
     save_email_config,
 )
-
 
 # ------------------------------------------------------------------ helpers
 
@@ -69,7 +67,7 @@ class TestEmailMessage:
         msg = EmailMessage(
             subject="Exam reminder",
             sender="prof@uni.edu",
-            date=datetime.now(tz=timezone.utc),
+            date=datetime.now(tz=UTC),
             is_unread=True,
         )
         assert "[*]" in str(msg)
@@ -77,7 +75,7 @@ class TestEmailMessage:
 
     def test_age_hours(self):
         from datetime import timedelta
-        old = datetime.now(tz=timezone.utc) - timedelta(hours=3)
+        old = datetime.now(tz=UTC) - timedelta(hours=3)
         msg = EmailMessage(subject="Old", sender="x", date=old)
         assert 2.9 < msg.age_hours < 3.5
 

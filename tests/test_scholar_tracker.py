@@ -3,7 +3,6 @@
 from datetime import date
 
 from presence.agents.scholar_tracker import (
-    Scholarship,
     ScholarshipTracker,
     scholarship_brief_section,
 )

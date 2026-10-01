@@ -10,14 +10,14 @@ from typing import Any
 import yaml
 
 from presence.adapters import ConsoleMessenger, TelegramError, TelegramMessenger
-
-log = logging.getLogger("presence.cycle")
 from presence.agents.brief import compose_brief
 from presence.connectors import Posting, SeenPostings, fetch_description, run_sources
 from presence.core.config import SourceEntry, load_profile, load_search, load_sources
 from presence.core.secrets import get_secret
 from presence.tracker import Tracker
 from presence.tracker.conventions import link_key
+
+log = logging.getLogger("presence.cycle")
 
 
 def telegram_for(data: Path) -> TelegramMessenger | None:
