@@ -104,3 +104,62 @@ def test_brief_ends_with_greeting(tmp_path):
     cal_dir = _setup_calendar(tmp_path)
     brief = compose_student_brief(cal_dir, today=date(2026, 10, 1))
     assert brief.strip().endswith("Have a good day!")
+
+
+SAMPLE_ICS_WITH_DEADLINES = """\
+BEGIN:VCALENDAR
+VERSION:2.0
+BEGIN:VEVENT
+DTSTART:20261001T091500
+DTEND:20261001T110000
+SUMMARY:Linear Algebra Lecture
+LOCATION:Room 305
+END:VEVENT
+BEGIN:VEVENT
+DTSTART:20261001T235900
+DTEND:20261001T235900
+SUMMARY:Problem Set 5
+END:VEVENT
+BEGIN:VEVENT
+DTSTART:20261002T170000
+DTEND:20261002T170000
+SUMMARY:Lab Report 2
+END:VEVENT
+BEGIN:VEVENT
+DTSTART:20261005
+SUMMARY:Essay Draft
+END:VEVENT
+END:VCALENDAR
+"""
+
+
+def _setup_with_deadlines(tmp_path: Path) -> Path:
+    cal_dir = tmp_path / "calendars"
+    cal_dir.mkdir()
+    (cal_dir / "test.ics").write_text(SAMPLE_ICS_WITH_DEADLINES)
+    return cal_dir
+
+
+def test_brief_deadline_section(tmp_path):
+    cal_dir = _setup_with_deadlines(tmp_path)
+    brief = compose_student_brief(cal_dir, today=date(2026, 10, 1))
+    assert "Upcoming deadlines" in brief
+    assert "Problem Set 5" in brief
+    assert "TODAY" in brief
+
+
+def test_brief_deadlines_not_in_classes(tmp_path):
+    cal_dir = _setup_with_deadlines(tmp_path)
+    brief = compose_student_brief(cal_dir, today=date(2026, 10, 1))
+    # "Today (1 class)" — the deadline should NOT count as a class
+    assert "1 class)" in brief
+    # The lecture should still be there
+    assert "Linear Algebra Lecture" in brief
+
+
+def test_brief_deadline_urgency_labels(tmp_path):
+    cal_dir = _setup_with_deadlines(tmp_path)
+    brief = compose_student_brief(cal_dir, today=date(2026, 10, 1))
+    assert "TODAY" in brief            # Problem Set 5 — same day
+    assert "tomorrow" in brief         # Lab Report 2 — next day
+    assert "in 4 days" in brief        # Essay Draft — Oct 5

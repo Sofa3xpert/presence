@@ -4,6 +4,7 @@ from datetime import date, datetime
 
 from presence.connectors.ical import (
     CalendarEvent,
+    deadlines_in_range,
     events_for_date,
     parse_ics,
     upcoming_events,
@@ -131,3 +132,125 @@ END:VCALENDAR
 def test_empty_ics():
     assert parse_ics("") == []
     assert parse_ics("BEGIN:VCALENDAR\nEND:VCALENDAR") == []
+
+
+# --- is_deadline tests ---
+
+def test_is_deadline_no_end():
+    """All-day events with no end are deadlines."""
+    events = parse_ics(SAMPLE_ICS)
+    deadline = [e for e in events if "Deadline" in e.summary][0]
+    assert deadline.is_deadline is True
+
+
+def test_is_deadline_zero_duration():
+    """Zero-duration events (DTSTART == DTEND) are deadlines."""
+    ics = """\
+BEGIN:VCALENDAR
+BEGIN:VEVENT
+DTSTART:20261005T235900
+DTEND:20261005T235900
+SUMMARY:Problem Set 5
+END:VEVENT
+END:VCALENDAR
+"""
+    events = parse_ics(ics)
+    assert events[0].is_deadline is True
+
+
+def test_is_deadline_keyword_in_summary():
+    """Events with deadline keywords are deadlines."""
+    ics = """\
+BEGIN:VCALENDAR
+BEGIN:VEVENT
+DTSTART:20261005T090000
+DTEND:20261005T110000
+SUMMARY:Midterm Exam
+LOCATION:Hall A
+END:VEVENT
+END:VCALENDAR
+"""
+    events = parse_ics(ics)
+    assert events[0].is_deadline is True
+
+
+def test_is_deadline_canvas_assignment_url():
+    """Events with /assignments/ in description are deadlines."""
+    ics = """\
+BEGIN:VCALENDAR
+BEGIN:VEVENT
+DTSTART:20261005T170000
+DTEND:20261005T190000
+SUMMARY:Math Worksheet
+DESCRIPTION:https://canvas.polyu.edu.hk/courses/123/assignments/456
+END:VEVENT
+END:VCALENDAR
+"""
+    events = parse_ics(ics)
+    assert events[0].is_deadline is True
+
+
+def test_is_deadline_regular_class():
+    """Regular classes are NOT deadlines."""
+    events = parse_ics(SAMPLE_ICS)
+    lecture = [e for e in events if "Linear Algebra" in e.summary][0]
+    assert lecture.is_deadline is False
+
+
+def test_is_deadline_short_duration():
+    """Events under 5 minutes are deadlines."""
+    e = CalendarEvent(summary="Quick thing",
+                      start=datetime(2026, 10, 5, 12, 0),
+                      end=datetime(2026, 10, 5, 12, 3))
+    assert e.is_deadline is True
+
+
+# --- deadlines_in_range tests ---
+
+DEADLINE_ICS = """\
+BEGIN:VCALENDAR
+BEGIN:VEVENT
+DTSTART:20261001T091500
+DTEND:20261001T110000
+SUMMARY:Linear Algebra Lecture
+LOCATION:Room 305
+END:VEVENT
+BEGIN:VEVENT
+DTSTART:20261002T235900
+DTEND:20261002T235900
+SUMMARY:Problem Set 3
+END:VEVENT
+BEGIN:VEVENT
+DTSTART:20261005
+SUMMARY:Essay Deadline
+END:VEVENT
+BEGIN:VEVENT
+DTSTART:20261003T100000
+DTEND:20261003T120000
+SUMMARY:Quiz 2
+END:VEVENT
+END:VCALENDAR
+"""
+
+
+def test_deadlines_in_range_basic():
+    events = parse_ics(DEADLINE_ICS)
+    dl = deadlines_in_range(events, days=7, today=date(2026, 10, 1))
+    assert len(dl) == 3  # Problem Set 3, Quiz 2, Essay Deadline
+    # Should be sorted by start time
+    assert dl[0].summary == "Problem Set 3"
+    assert dl[1].summary == "Quiz 2"
+    assert dl[2].summary == "Essay Deadline"
+
+
+def test_deadlines_in_range_excludes_classes():
+    events = parse_ics(DEADLINE_ICS)
+    dl = deadlines_in_range(events, days=7, today=date(2026, 10, 1))
+    assert not any("Lecture" in d.summary for d in dl)
+
+
+def test_deadlines_in_range_respects_window():
+    events = parse_ics(DEADLINE_ICS)
+    dl = deadlines_in_range(events, days=2, today=date(2026, 10, 1))
+    assert len(dl) == 1  # only Problem Set 3 (Oct 2)
+    assert dl[0].summary == "Problem Set 3"

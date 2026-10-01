@@ -41,6 +41,24 @@ class CalendarEvent(BaseModel):
             return f"{s}–{self.end.strftime('%H:%M')}"
         return s
 
+    @property
+    def is_deadline(self) -> bool:
+        """Heuristic: is this event a deadline rather than a class?"""
+        # Zero duration or no end → deadline, not a class
+        if self.end is None or self.end == self.start:
+            return True
+        if self.duration_minutes is not None and self.duration_minutes < 5:
+            return True
+        # Keywords in summary
+        keywords = ("assignment", "quiz", "due", "homework", "submission",
+                    "deadline", "exam", "test", "discussion post")
+        if any(kw in self.summary.lower() for kw in keywords):
+            return True
+        # Canvas assignment URL in description
+        if "/assignments/" in self.description:
+            return True
+        return False
+
     def __str__(self) -> str:
         parts = [self.format_time(), self.summary]
         if self.location:
@@ -179,3 +197,14 @@ def upcoming_events(events: list[CalendarEvent], days: int = 7,
     start = today or date.today()
     end = start + timedelta(days=days)
     return [e for e in events if start <= e.date < end]
+
+
+def deadlines_in_range(events: list[CalendarEvent], days: int = 7,
+                       today: date | None = None) -> list[CalendarEvent]:
+    """Return deadline events in the next N days, sorted by start time."""
+    start = today or date.today()
+    end = start + timedelta(days=days)
+    return sorted(
+        [e for e in events if e.is_deadline and start <= e.date < end],
+        key=lambda e: e.start,
+    )
