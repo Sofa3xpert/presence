@@ -128,6 +128,35 @@ def run_student_brief(data: Path, send: bool = False) -> tuple[str, bool]:
     return brief, delivered
 
 
+def run_student_weekly(data: Path, send: bool = False) -> tuple[str, bool]:
+    """Compose the weekly summary and optionally send via Telegram.
+
+    Returns (brief_text, delivered).
+    """
+    from presence.agents.student_brief import compose_weekly_summary
+    from presence.connectors.cal_feeds import refresh_all
+
+    # refresh URL-based calendars (Canvas, etc.) before composing
+    refresh_all(data)
+
+    cal_dir = data / "calendars"
+
+    # scholarship deadline reminders
+    from presence.agents.scholar_tracker import ScholarshipTracker, scholarship_brief_section
+    scholar_tracker = ScholarshipTracker(data / "scholarships.json")
+    scholarship_lines = scholarship_brief_section(scholar_tracker)
+
+    brief = compose_weekly_summary(cal_dir, scholarship_lines=scholarship_lines)
+    (data / "last_student_weekly.txt").write_text(brief)
+    delivered = False
+    if send:
+        messenger = telegram_for(data)
+        if messenger is not None:
+            messenger.send(brief)
+            delivered = True
+    return brief, delivered
+
+
 def _postings_to_opportunities(data: Path, config: Any) -> list[Any]:
     """Reuse existing job board connectors to find internships.
 
@@ -230,5 +259,5 @@ def run_student_scout(data: Path) -> int:
 
 
 __all__ = ["ConsoleMessenger", "TelegramError", "keep_description", "run_cycle",
-           "run_student_brief", "run_student_scout",
+           "run_student_brief", "run_student_scout", "run_student_weekly",
            "sheet_sync_if_configured", "telegram_for"]

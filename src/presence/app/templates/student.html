@@ -2,49 +2,9 @@
 <h1>Student Presence</h1>
 <p class="lede">Your university life in one daily brief. Everything runs locally — your data never leaves this machine.</p>
 
-<section class="step todo"><h2>Add Schedule</h2>
-<p class="hint">Upload a <code>.ics</code> calendar file, paste a calendar URL, or upload a PDF timetable.</p>
-<form class="stack" method="post" action="/student/upload" enctype="multipart/form-data" style="max-width:500px">
-  <label>Calendar file (.ics or .pdf)
-    <input type="file" name="schedule_file" accept=".ics,.pdf">
-  </label>
-  <label>Or paste a calendar URL
-    <input type="text" name="calendar_url" placeholder="https://calendar.example.com/feed.ics">
-  </label>
-  <div><button type="submit">Add to schedule</button></div>
-</form>
+<div class="student-grid">
 
-<details open style="margin-top:16px;max-width:500px">
-  <summary style="cursor:pointer;font-weight:bold">Connect Canvas</summary>
-  <ol style="margin-top:8px;padding-left:20px">
-    <li>Log into <strong>Canvas</strong></li>
-    <li>Click your profile icon (top-left) &rarr; <strong>Settings</strong></li>
-    <li>Scroll to <strong>Calendar</strong> section &rarr; click <strong>Calendar Feed</strong></li>
-    <li>Copy the URL that appears</li>
-    <li>Paste it in the "calendar URL" field above and click <strong>Add to schedule</strong></li>
-  </ol>
-  <p class="hint">Canvas feeds auto-refresh before each daily brief, so new assignments appear automatically.</p>
-</details>
-
-{% if feeds %}
-<h3 style="margin-top:20px">Registered feeds</h3>
-<table style="max-width:500px">
-  <tr><th>Label</th><th></th></tr>
-  {% for f in feeds %}
-  <tr>
-    <td>{{ f.label }}</td>
-    <td>
-      <form method="post" action="/student/feed/remove" style="margin:0">
-        <input type="hidden" name="feed_url" value="{{ f.url }}">
-        <input type="hidden" name="feed_filename" value="{{ f.filename }}">
-        <button type="submit" class="btn-small">Remove</button>
-      </form>
-    </td>
-  </tr>
-  {% endfor %}
-</table>
-{% endif %}
-</section>
+<div class="sg-main">
 
 <section class="step {{ 'done' if total_events else 'todo' }}"><h2>Your Week</h2>
 {% if total_events %}
@@ -66,58 +26,15 @@
 <p class="hint">No classes in the next 7 days.</p>
 {% endif %}
 {% else %}
-<p class="hint">No calendar loaded yet. Place a <code>.ics</code> file in <code>{{ data_dir }}/calendars/</code> to see your schedule here.</p>
-{% endif %}
-</section>
-
-<section class="step {{ 'done' if brief else 'todo' }}"><h2>Daily Brief</h2>
-{% if brief %}
-<pre class="brief">{{ brief }}</pre>
-{% else %}
-<p class="hint">No brief generated yet. Click the button to create today's brief.</p>
-{% endif %}
-<div style="display:flex;gap:12px;margin-top:12px">
-<form method="post" action="/student/brief">
-  <button type="submit">Generate today's brief</button>
-</form>
-<form method="post" action="/student/brief">
-  <input type="hidden" name="send" value="1">
-  <button type="submit">Generate &amp; send to Telegram</button>
-</form>
-</div>
-</section>
-
-<section class="step {{ 'done' if tg_paired else 'todo' }}"><h2>Telegram</h2>
-{% if tg_paired %}
-<p class="hint">Connected — your daily brief will be sent here every morning.</p>
-<form method="post" action="/student/telegram/unpair" style="margin-top:8px">
-  <button type="submit" class="btn-small">Disconnect Telegram</button>
-</form>
-{% else %}
-<p class="hint">Connect a Telegram bot to receive your daily brief every morning.</p>
-<details open style="max-width:500px">
-  <summary style="cursor:pointer;font-weight:bold">How to connect</summary>
-  <ol style="margin-top:8px;padding-left:20px">
-    <li>Open Telegram, search for <strong>@BotFather</strong></li>
-    <li>Send <code>/newbot</code>, pick a name and username</li>
-    <li>Copy the <strong>token</strong> BotFather gives you</li>
-    <li>Send any message to your new bot (e.g. "hi")</li>
-    <li>Paste the token below and click <strong>Pair</strong></li>
-  </ol>
-</details>
-<form class="stack" method="post" action="/student/telegram/pair" style="max-width:500px;margin-top:8px">
-  <label>Bot token
-    <input type="text" name="tg_token" placeholder="123456789:ABCdefGHIjklMNOpqrsTUVwxyz" required>
-  </label>
-  <div><button type="submit">Pair</button></div>
-</form>
+<p class="hint">No calendar loaded yet. Upload an <code>.ics</code> file or connect Canvas to see your schedule.</p>
 {% endif %}
 </section>
 
 <section class="step {{ 'done' if scholarships else 'todo' }}"><h2>Opportunities</h2>
-<p class="hint">Track scholarships, internships, events. Add manually or let the Scout find them via RSS feeds. Deadlines show up in your Daily Brief.</p>
+<p class="hint">Track scholarships, internships, events. Deadlines show up in your Daily Brief.</p>
 
-<details style="max-width:500px">
+<div style="display:flex;gap:8px;margin-bottom:12px;flex-wrap:wrap">
+<details style="flex:1;min-width:240px">
   <summary style="cursor:pointer;font-weight:bold">Add manually</summary>
   <form class="stack" method="post" action="/student/scholarship/add" style="margin-top:8px">
     <label>Name
@@ -160,9 +77,9 @@
   </form>
 </details>
 
-<details style="max-width:500px;margin-top:12px">
-  <summary style="cursor:pointer;font-weight:bold">RSS Feeds &amp; Scout settings</summary>
-  <p class="hint" style="margin-top:8px">Add RSS/Atom feeds — the Scout checks them and adds new opportunities to the table below.</p>
+<details style="flex:1;min-width:240px">
+  <summary style="cursor:pointer;font-weight:bold">RSS Feeds &amp; Scout</summary>
+  <p class="hint" style="margin-top:8px">Add RSS/Atom feeds — the Scout checks them and adds new opportunities.</p>
   <form class="stack" method="post" action="/student/scout/feed">
     <div style="display:flex;gap:12px">
       <label style="flex:2">Feed URL
@@ -214,15 +131,16 @@
     <div><button type="submit">Save keywords</button></div>
   </form>
 </details>
+</div>
 
-<div style="margin-top:12px">
+<div style="margin-bottom:12px">
   <form method="post" action="/student/scout" style="display:inline">
     <button type="submit">Run Scout</button>
   </form>
 </div>
 
 {% if scholarships %}
-<table style="margin-top:16px">
+<table>
   <tr><th>Opportunity</th><th>Kind</th><th>Deadline</th><th>Status</th><th></th></tr>
   {% for s in scholarships %}
   <tr>
@@ -258,9 +176,134 @@
 {% endif %}
 </section>
 
+</div>
+
+<div class="sg-side">
+
+<section class="step {{ 'done' if brief or weekly else 'todo' }}"><h2>Briefs</h2>
+<div style="display:flex;gap:8px;margin-bottom:12px">
+  <button class="btn-tab active" onclick="showBrief('daily',this)">Daily</button>
+  <button class="btn-tab" onclick="showBrief('weekly',this)">Weekly</button>
+</div>
+<div id="brief-daily">
+{% if brief %}
+<pre class="brief">{{ brief }}</pre>
+{% else %}
+<p class="hint">No brief generated yet.</p>
+{% endif %}
+<div style="display:flex;gap:8px;margin-top:12px;flex-wrap:wrap">
+<form method="post" action="/student/brief">
+  <button type="submit">Generate</button>
+</form>
+<form method="post" action="/student/brief">
+  <input type="hidden" name="send" value="1">
+  <button type="submit">Send to Telegram</button>
+</form>
+</div>
+</div>
+<div id="brief-weekly" style="display:none">
+{% if weekly %}
+<pre class="brief">{{ weekly }}</pre>
+{% else %}
+<p class="hint">No weekly summary yet.</p>
+{% endif %}
+<div style="display:flex;gap:8px;margin-top:12px;flex-wrap:wrap">
+<form method="post" action="/student/weekly">
+  <button type="submit">Generate</button>
+</form>
+<form method="post" action="/student/weekly">
+  <input type="hidden" name="send" value="1">
+  <button type="submit">Send to Telegram</button>
+</form>
+</div>
+</div>
+<script>
+function showBrief(which,btn){
+  document.getElementById('brief-daily').style.display=which==='daily'?'':'none';
+  document.getElementById('brief-weekly').style.display=which==='weekly'?'':'none';
+  document.querySelectorAll('.btn-tab').forEach(function(b){b.classList.remove('active')});
+  btn.classList.add('active');
+}
+</script>
+</section>
+
+<section class="step {{ 'done' if tg_paired else 'todo' }}"><h2>Telegram</h2>
+{% if tg_paired %}
+<p class="hint">Connected — briefs arrive every morning at 7:00.</p>
+<form method="post" action="/student/telegram/unpair" style="margin-top:8px">
+  <button type="submit" class="btn-small">Disconnect</button>
+</form>
+{% else %}
+<p class="hint">Connect a bot to receive briefs via Telegram.</p>
+<details style="max-width:500px">
+  <summary style="cursor:pointer;font-weight:bold">How to connect</summary>
+  <ol style="margin-top:8px;padding-left:20px">
+    <li>Open Telegram, search for <strong>@BotFather</strong></li>
+    <li>Send <code>/newbot</code>, pick a name and username</li>
+    <li>Copy the <strong>token</strong> BotFather gives you</li>
+    <li>Send any message to your new bot (e.g. "hi")</li>
+    <li>Paste the token below and click <strong>Pair</strong></li>
+  </ol>
+</details>
+<form class="stack" method="post" action="/student/telegram/pair" style="margin-top:8px">
+  <label>Bot token
+    <input type="text" name="tg_token" placeholder="123456789:ABCdefGHI..." required>
+  </label>
+  <div><button type="submit">Pair</button></div>
+</form>
+{% endif %}
+</section>
+
+<section class="step todo"><h2>Add Schedule</h2>
+<form class="stack" method="post" action="/student/upload" enctype="multipart/form-data">
+  <label>Calendar file (.ics or .pdf)
+    <input type="file" name="schedule_file" accept=".ics,.pdf">
+  </label>
+  <label>Or paste a calendar URL
+    <input type="text" name="calendar_url" placeholder="https://calendar.example.com/feed.ics">
+  </label>
+  <div><button type="submit">Add to schedule</button></div>
+</form>
+
+<details style="margin-top:12px">
+  <summary style="cursor:pointer;font-weight:bold">Connect Canvas</summary>
+  <ol style="margin-top:8px;padding-left:20px;font-size:13px">
+    <li>Log into <strong>Canvas</strong></li>
+    <li>Profile icon &rarr; <strong>Settings</strong></li>
+    <li><strong>Calendar</strong> section &rarr; <strong>Calendar Feed</strong></li>
+    <li>Copy the URL and paste above</li>
+  </ol>
+</details>
+
+{% if feeds %}
+<h3 style="margin-top:16px">Feeds</h3>
+<table>
+  <tr><th>Label</th><th></th></tr>
+  {% for f in feeds %}
+  <tr>
+    <td>{{ f.label }}</td>
+    <td>
+      <form method="post" action="/student/feed/remove" style="margin:0">
+        <input type="hidden" name="feed_url" value="{{ f.url }}">
+        <input type="hidden" name="feed_filename" value="{{ f.filename }}">
+        <button type="submit" class="btn-small">Remove</button>
+      </form>
+    </td>
+  </tr>
+  {% endfor %}
+</table>
+{% endif %}
+</section>
+
+</div>
+</div>
+
+<details style="margin-top:16px">
+<summary style="cursor:pointer;font-weight:bold;color:var(--muted)">About this project</summary>
+<div class="student-grid" style="margin-top:12px">
 <section class="step todo"><h2>What you get</h2>
 <div class="row" style="gap:24px">
-<div style="flex:1;min-width:260px">
+<div style="flex:1;min-width:220px">
   <h3>Daily Student Brief</h3>
   <p>A morning Telegram message with:</p>
   <ul>
@@ -269,9 +312,9 @@
     <li>Scholarship deadline reminders</li>
   </ul>
 </div>
-<div style="flex:1;min-width:260px">
+<div style="flex:1;min-width:220px">
   <h3>Opportunity Scout</h3>
-  <p>Same as job Presence, but for:</p>
+  <p>Finds and tracks:</p>
   <ul>
     <li>Internships</li>
     <li>Mentorships</li>
@@ -282,43 +325,31 @@
 </div>
 </section>
 
-<section class="step todo"><h2>Data Sources (Connectors)</h2>
-<table>
-  <tr><th>Source</th><th>How</th><th>Status</th></tr>
-  <tr><td>Class timetable</td><td>iCal import (.ics file) or Google Calendar</td><td><span class="pill {{ 'on' if total_events else 'off' }}">{{ 'done' if total_events else 'planned' }}</span></td></tr>
-  <tr><td>Exam timetable</td><td>Same — iCal or manual entry</td><td><span class="pill off">planned</span></td></tr>
-  <tr><td>Homework deadlines</td><td>University LMS (Canvas, Moodle, Blackboard) or manual</td><td><span class="pill {{ 'on' if feeds else 'off' }}">{{ 'done' if feeds else 'planned' }}</span></td></tr>
-</table>
-</section>
-
 <section class="step todo"><h2>Build Plan</h2>
-<p class="hint">We're building this step by step. Each feature lights up here as it's done.</p>
 <table>
-  <tr><th>#</th><th>Step</th><th>What it does</th><th>Status</th></tr>
+  <tr><th>#</th><th>Step</th><th>Status</th></tr>
   <tr>
     <td>1</td>
     <td>iCal connector</td>
-    <td>Import .ics files — classes, exams, deadlines appear in the system</td>
     <td><span class="pill {{ 'on' if total_events else 'off' }}">{{ 'done' if total_events else 'planned' }}</span></td>
   </tr>
   <tr>
     <td>2</td>
-    <td>Student daily brief agent</td>
-    <td>Morning Telegram message with today's schedule + deadlines</td>
+    <td>Daily brief + Telegram</td>
     <td><span class="pill {{ 'on' if plan.brief else 'off' }}">{{ 'done' if plan.brief else 'planned' }}</span></td>
   </tr>
   <tr>
     <td>3</td>
     <td>LMS connector</td>
-    <td>Pull homework deadlines from Canvas / Moodle / Blackboard</td>
     <td><span class="pill on">done</span></td>
   </tr>
   <tr>
     <td>4</td>
     <td>Opportunities</td>
-    <td>Scout + track internships, scholarships, events; deadlines in Daily Brief</td>
     <td><span class="pill on">done</span></td>
   </tr>
 </table>
 </section>
+</div>
+</details>
 {% endblock %}

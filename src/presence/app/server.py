@@ -1525,6 +1525,8 @@ def create_app(data: Path) -> Flask:
                 schedule[d] = sorted(day_events, key=lambda e: e.start)
         brief_file = data / "last_student_brief.txt"
         brief = brief_file.read_text() if brief_file.exists() else ""
+        weekly_file = data / "last_student_weekly.txt"
+        weekly = weekly_file.read_text() if weekly_file.exists() else ""
         feeds = list_feeds(data)
         # Scholarship tracker
         from presence.agents.scholar_tracker import ScholarshipTracker
@@ -1544,6 +1546,7 @@ def create_app(data: Path) -> Flask:
                                total_events=len(events),
                                cal_files=list(cal_dir.glob("*.ics")) if cal_dir.is_dir() else [],
                                brief=brief,
+                               weekly=weekly,
                                feeds=feeds,
                                scholarships=scholarships,
                                scout_config=scout_config,
@@ -1596,6 +1599,20 @@ def create_app(data: Path) -> Flask:
             flash("brief generated — Telegram is not paired, so it shows here instead", "error")
         else:
             flash("daily brief generated")
+        return redirect(url_for("student_plan"))
+
+    @app.post("/student/weekly")
+    def student_weekly():
+        from presence.cycle import run_student_weekly
+        send = request.form.get("send") == "1"
+        brief, delivered = run_student_weekly(data, send=send)
+        if delivered:
+            flash("weekly summary sent to Telegram")
+        elif send:
+            flash("weekly summary generated — Telegram not paired",
+                  "error")
+        else:
+            flash("weekly summary generated")
         return redirect(url_for("student_plan"))
 
     @app.post("/student/telegram/pair")
