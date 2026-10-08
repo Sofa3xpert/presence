@@ -1,0 +1,355 @@
+{% extends "base.html" %}{% block content %}
+<h1>Student Presence</h1>
+<p class="lede">Your university life in one daily brief. Everything runs locally — your data never leaves this machine.</p>
+
+<div class="student-grid">
+
+<div class="sg-main">
+
+<section class="step {{ 'done' if total_events else 'todo' }}"><h2>Your Week</h2>
+{% if total_events %}
+<p class="hint">{{ total_events }} events loaded from {{ cal_files|length }} calendar file{{ 's' if cal_files|length != 1 else '' }}.</p>
+{% for day, events in schedule.items() %}
+<h3>{{ '>>> Today' if day == today else day.strftime('%A') }} · {{ day.strftime('%d %b') }}</h3>
+<table>
+  <tr><th>Time</th><th>Class</th><th>Room</th></tr>
+  {% for e in events %}
+  <tr>
+    <td class="mono">{{ e.format_time() }}</td>
+    <td>{{ e.summary }}</td>
+    <td>{{ e.location }}</td>
+  </tr>
+  {% endfor %}
+</table>
+{% endfor %}
+{% if not schedule %}
+<p class="hint">No classes in the next 7 days.</p>
+{% endif %}
+{% else %}
+<p class="hint">No calendar loaded yet. Upload an <code>.ics</code> file or connect Canvas to see your schedule.</p>
+{% endif %}
+</section>
+
+<section class="step {{ 'done' if scholarships else 'todo' }}"><h2>Opportunities</h2>
+<p class="hint">Track scholarships, internships, events. Deadlines show up in your Daily Brief.</p>
+
+<div style="display:flex;gap:8px;margin-bottom:12px;flex-wrap:wrap">
+<details style="flex:1;min-width:240px">
+  <summary style="cursor:pointer;font-weight:bold">Add manually</summary>
+  <form class="stack" method="post" action="/student/scholarship/add" style="margin-top:8px">
+    <label>Name
+      <input type="text" name="scholarship_name" placeholder="Dept. of DS&AI Scholarship for Hall Residents" required>
+    </label>
+    <div style="display:flex;gap:12px">
+      <label style="flex:1">Organization
+        <input type="text" name="scholarship_org" value="PolyU" placeholder="PolyU">
+      </label>
+      <label style="flex:1">Kind
+        <select name="scholarship_kind">
+          <option value="scholarship">Scholarship</option>
+          <option value="internship">Internship</option>
+          <option value="event">Event</option>
+          <option value="mentorship">Mentorship</option>
+          <option value="other">Other</option>
+        </select>
+      </label>
+    </div>
+    <div style="display:flex;gap:12px">
+      <label style="flex:1">Deadline
+        <input type="date" name="scholarship_deadline">
+      </label>
+      <label style="flex:0.7">Time
+        <input type="time" name="scholarship_time">
+      </label>
+      <label style="flex:1">Amount
+        <input type="text" name="scholarship_amount" placeholder="HK$10,000">
+      </label>
+    </div>
+    <div style="display:flex;gap:12px">
+      <label style="flex:1">Link (optional)
+        <input type="text" name="scholarship_url" placeholder="https://...">
+      </label>
+    </div>
+    <label>Notes
+      <input type="text" name="scholarship_notes" placeholder="Need hall residence proof, GPA 3.0+">
+    </label>
+    <div><button type="submit">Add</button></div>
+  </form>
+</details>
+
+<details style="flex:1;min-width:240px">
+  <summary style="cursor:pointer;font-weight:bold">RSS Feeds &amp; Scout</summary>
+  <p class="hint" style="margin-top:8px">Add RSS/Atom feeds — the Scout checks them and adds new opportunities.</p>
+  <form class="stack" method="post" action="/student/scout/feed">
+    <div style="display:flex;gap:12px">
+      <label style="flex:2">Feed URL
+        <input type="text" name="feed_url" placeholder="https://example.com/opportunities.rss" required>
+      </label>
+      <label style="flex:1">Label
+        <input type="text" name="feed_label" placeholder="PolyU Careers">
+      </label>
+      <label style="flex:1">Kind
+        <select name="feed_kind">
+          <option value="">Auto-detect</option>
+          <option value="internship">Internship</option>
+          <option value="scholarship">Scholarship</option>
+          <option value="event">Event</option>
+          <option value="mentorship">Mentorship</option>
+        </select>
+      </label>
+    </div>
+    <div><button type="submit">Add feed</button></div>
+  </form>
+  {% if scout_config.rss_feeds %}
+  <table style="margin-top:8px">
+    <tr><th>Feed</th><th>Kind</th><th></th></tr>
+    {% for f in scout_config.rss_feeds %}
+    <tr>
+      <td>{{ f.label or f.url[:40] }}</td>
+      <td>{{ f.kind or 'auto' }}</td>
+      <td>
+        <form method="post" action="/student/scout/feed/remove" style="margin:0">
+          <input type="hidden" name="feed_url" value="{{ f.url }}">
+          <button type="submit" class="btn-small">Remove</button>
+        </form>
+      </td>
+    </tr>
+    {% endfor %}
+  </table>
+  {% endif %}
+  <h4 style="margin-top:12px">Keywords</h4>
+  <form class="stack" method="post" action="/student/scout/keywords">
+    <label>Include (comma-separated)
+      <input type="text" name="keywords" value="{{ scout_config.keywords | join(', ') }}" placeholder="intern, graduate, student">
+    </label>
+    <label>Exclude (comma-separated)
+      <input type="text" name="keywords_exclude" value="{{ scout_config.keywords_exclude | join(', ') }}" placeholder="senior, manager">
+    </label>
+    <label>Locations (comma-separated, leave empty for any)
+      <input type="text" name="locations" value="{{ scout_config.locations | join(', ') }}" placeholder="Hong Kong, Remote">
+    </label>
+    <div><button type="submit">Save keywords</button></div>
+  </form>
+</details>
+</div>
+
+<div style="margin-bottom:12px">
+  <form method="post" action="/student/scout" style="display:inline">
+    <button type="submit">Run Scout</button>
+  </form>
+</div>
+
+{% if scholarships %}
+<table>
+  <tr><th>Opportunity</th><th>Kind</th><th>Deadline</th><th>Status</th><th></th></tr>
+  {% for s in scholarships %}
+  <tr>
+    <td>
+      {% if s.url %}<a href="{{ s.url }}" target="_blank">{{ s.name }}</a>{% else %}{{ s.name }}{% endif %}
+      {% if s.organization and s.organization != 'PolyU' %}<br><span class="hint">{{ s.organization }}</span>{% endif %}
+      {% if s.amount %}<br><span class="hint">{{ s.amount }}</span>{% endif %}
+      {% if s.notes %}<br><span class="hint">{{ s.notes[:80] }}</span>{% endif %}
+    </td>
+    <td>{{ s.kind or 'other' }}</td>
+    <td class="mono">{{ s.deadline or '—' }}</td>
+    <td>
+      <form method="post" action="/student/scholarship/update" style="margin:0">
+        <input type="hidden" name="scholarship_id" value="{{ s.id }}">
+        <select name="scholarship_status" onchange="this.form.submit()" style="font-size:0.85em">
+          <option value="to_apply" {{ 'selected' if s.status == 'to_apply' else '' }}>to apply</option>
+          <option value="applied" {{ 'selected' if s.status == 'applied' else '' }}>applied</option>
+          <option value="won" {{ 'selected' if s.status == 'won' else '' }}>won</option>
+          <option value="rejected" {{ 'selected' if s.status == 'rejected' else '' }}>rejected</option>
+          <option value="expired" {{ 'selected' if s.status == 'expired' else '' }}>expired</option>
+        </select>
+      </form>
+    </td>
+    <td>
+      <form method="post" action="/student/scholarship/remove" style="margin:0">
+        <input type="hidden" name="scholarship_id" value="{{ s.id }}">
+        <button type="submit" class="btn-small">x</button>
+      </form>
+    </td>
+  </tr>
+  {% endfor %}
+</table>
+{% endif %}
+</section>
+
+</div>
+
+<div class="sg-side">
+
+<section class="step {{ 'done' if brief or weekly else 'todo' }}"><h2>Briefs</h2>
+<div style="display:flex;gap:8px;margin-bottom:12px">
+  <button class="btn-tab active" onclick="showBrief('daily',this)">Daily</button>
+  <button class="btn-tab" onclick="showBrief('weekly',this)">Weekly</button>
+</div>
+<div id="brief-daily">
+{% if brief %}
+<pre class="brief">{{ brief }}</pre>
+{% else %}
+<p class="hint">No brief generated yet.</p>
+{% endif %}
+<div style="display:flex;gap:8px;margin-top:12px;flex-wrap:wrap">
+<form method="post" action="/student/brief">
+  <button type="submit">Generate</button>
+</form>
+<form method="post" action="/student/brief">
+  <input type="hidden" name="send" value="1">
+  <button type="submit">Send to Telegram</button>
+</form>
+</div>
+</div>
+<div id="brief-weekly" style="display:none">
+{% if weekly %}
+<pre class="brief">{{ weekly }}</pre>
+{% else %}
+<p class="hint">No weekly summary yet.</p>
+{% endif %}
+<div style="display:flex;gap:8px;margin-top:12px;flex-wrap:wrap">
+<form method="post" action="/student/weekly">
+  <button type="submit">Generate</button>
+</form>
+<form method="post" action="/student/weekly">
+  <input type="hidden" name="send" value="1">
+  <button type="submit">Send to Telegram</button>
+</form>
+</div>
+</div>
+<script>
+function showBrief(which,btn){
+  document.getElementById('brief-daily').style.display=which==='daily'?'':'none';
+  document.getElementById('brief-weekly').style.display=which==='weekly'?'':'none';
+  document.querySelectorAll('.btn-tab').forEach(function(b){b.classList.remove('active')});
+  btn.classList.add('active');
+}
+</script>
+</section>
+
+<section class="step {{ 'done' if tg_paired else 'todo' }}"><h2>Telegram</h2>
+{% if tg_paired %}
+<p class="hint">Connected — briefs arrive every morning at 7:00.</p>
+<form method="post" action="/student/telegram/unpair" style="margin-top:8px">
+  <button type="submit" class="btn-small">Disconnect</button>
+</form>
+{% else %}
+<p class="hint">Connect a bot to receive briefs via Telegram.</p>
+<details style="max-width:500px">
+  <summary style="cursor:pointer;font-weight:bold">How to connect</summary>
+  <ol style="margin-top:8px;padding-left:20px">
+    <li>Open Telegram, search for <strong>@BotFather</strong></li>
+    <li>Send <code>/newbot</code>, pick a name and username</li>
+    <li>Copy the <strong>token</strong> BotFather gives you</li>
+    <li>Send any message to your new bot (e.g. "hi")</li>
+    <li>Paste the token below and click <strong>Pair</strong></li>
+  </ol>
+</details>
+<form class="stack" method="post" action="/student/telegram/pair" style="margin-top:8px">
+  <label>Bot token
+    <input type="text" name="tg_token" placeholder="123456789:ABCdefGHI..." required>
+  </label>
+  <div><button type="submit">Pair</button></div>
+</form>
+{% endif %}
+</section>
+
+<section class="step todo"><h2>Add Schedule</h2>
+<form class="stack" method="post" action="/student/upload" enctype="multipart/form-data">
+  <label>Calendar file (.ics or .pdf)
+    <input type="file" name="schedule_file" accept=".ics,.pdf">
+  </label>
+  <label>Or paste a calendar URL
+    <input type="text" name="calendar_url" placeholder="https://calendar.example.com/feed.ics">
+  </label>
+  <div><button type="submit">Add to schedule</button></div>
+</form>
+
+<details style="margin-top:12px">
+  <summary style="cursor:pointer;font-weight:bold">Connect Canvas</summary>
+  <ol style="margin-top:8px;padding-left:20px;font-size:13px">
+    <li>Log into <strong>Canvas</strong></li>
+    <li>Profile icon &rarr; <strong>Settings</strong></li>
+    <li><strong>Calendar</strong> section &rarr; <strong>Calendar Feed</strong></li>
+    <li>Copy the URL and paste above</li>
+  </ol>
+</details>
+
+{% if feeds %}
+<h3 style="margin-top:16px">Feeds</h3>
+<table>
+  <tr><th>Label</th><th></th></tr>
+  {% for f in feeds %}
+  <tr>
+    <td>{{ f.label }}</td>
+    <td>
+      <form method="post" action="/student/feed/remove" style="margin:0">
+        <input type="hidden" name="feed_url" value="{{ f.url }}">
+        <input type="hidden" name="feed_filename" value="{{ f.filename }}">
+        <button type="submit" class="btn-small">Remove</button>
+      </form>
+    </td>
+  </tr>
+  {% endfor %}
+</table>
+{% endif %}
+</section>
+
+</div>
+</div>
+
+<details style="margin-top:16px">
+<summary style="cursor:pointer;font-weight:bold;color:var(--muted)">About this project</summary>
+<div class="student-grid" style="margin-top:12px">
+<section class="step todo"><h2>What you get</h2>
+<div class="row" style="gap:24px">
+<div style="flex:1;min-width:220px">
+  <h3>Daily Student Brief</h3>
+  <p>A morning Telegram message with:</p>
+  <ul>
+    <li>Today's classes and exams</li>
+    <li>Upcoming homework deadlines</li>
+    <li>Scholarship deadline reminders</li>
+  </ul>
+</div>
+<div style="flex:1;min-width:220px">
+  <h3>Opportunity Scout</h3>
+  <p>Finds and tracks:</p>
+  <ul>
+    <li>Internships</li>
+    <li>Mentorships</li>
+    <li>Scholarships</li>
+    <li>Student events / career fairs</li>
+  </ul>
+</div>
+</div>
+</section>
+
+<section class="step todo"><h2>Build Plan</h2>
+<table>
+  <tr><th>#</th><th>Step</th><th>Status</th></tr>
+  <tr>
+    <td>1</td>
+    <td>iCal connector</td>
+    <td><span class="pill {{ 'on' if total_events else 'off' }}">{{ 'done' if total_events else 'planned' }}</span></td>
+  </tr>
+  <tr>
+    <td>2</td>
+    <td>Daily brief + Telegram</td>
+    <td><span class="pill {{ 'on' if plan.brief else 'off' }}">{{ 'done' if plan.brief else 'planned' }}</span></td>
+  </tr>
+  <tr>
+    <td>3</td>
+    <td>LMS connector</td>
+    <td><span class="pill on">done</span></td>
+  </tr>
+  <tr>
+    <td>4</td>
+    <td>Opportunities</td>
+    <td><span class="pill on">done</span></td>
+  </tr>
+</table>
+</section>
+</div>
+</details>
+{% endblock %}

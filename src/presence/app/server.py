@@ -13,7 +13,7 @@ import subprocess
 import sys
 import threading
 import time
-from datetime import date, datetime
+from datetime import date, datetime, timedelta
 from pathlib import Path
 from typing import Any
 
@@ -262,6 +262,26 @@ def _state(data: Path) -> dict[str, Any]:
             "freshness_days": int(search.get("freshness_hours", 336)) // 24,
         },
     }
+
+
+def _save_secrets_env(data: Path, **updates: str) -> None:
+    """Update key=value pairs in secrets.env, preserving comments."""
+    path = data / "secrets.env"
+    lines: list[str] = []
+    if path.exists():
+        lines = path.read_text().splitlines()
+    written: set[str] = set()
+    for i, line in enumerate(lines):
+        stripped = line.strip()
+        if stripped and not stripped.startswith("#") and "=" in stripped:
+            key = stripped.split("=", 1)[0].strip()
+            if key in updates:
+                lines[i] = f"{key}={updates[key]}"
+                written.add(key)
+    for key, value in updates.items():
+        if key not in written:
+            lines.append(f"{key}={value}")
+    path.write_text("\n".join(lines) + "\n")
 
 
 def create_app(data: Path) -> Flask:
@@ -1487,6 +1507,262 @@ def create_app(data: Path) -> Flask:
             "next_run": runner.next_run(data),
             **extra,
         }
+
+    @app.get("/student")
+    def student_plan():
+        from presence.connectors.cal_feeds import list_feeds
+        from presence.connectors.ical import events_for_date, load_all_ics
+        plan_file = data / "student_plan.json"
+        plan = json.loads(plan_file.read_text()) if plan_file.exists() else {}
+        cal_dir = data / "calendars"
+        events = load_all_ics(cal_dir) if cal_dir.is_dir() else []
+        today = date.today()
+        schedule = {}
+        for i in range(7):
+            d = today + timedelta(days=i)
+            day_events = events_for_date(events, d)
+            if day_events:
+                schedule[d] = sorted(day_events, key=lambda e: e.start)
+        brief_file = data / "last_student_brief.txt"
+        brief = brief_file.read_text() if brief_file.exists() else ""
+        weekly_file = data / "last_student_weekly.txt"
+        weekly = weekly_file.read_text() if weekly_file.exists() else ""
+        feeds = list_feeds(data)
+        # Scholarship tracker
+        from presence.agents.scholar_tracker import ScholarshipTracker
+        scholar_tracker = ScholarshipTracker(data / "scholarships.json")
+        scholar_tracker.expired_check()
+        scholarships = scholar_tracker.all()
+        # Scout config
+        from presence.agents.scout import load_scout_config
+        scout_config = load_scout_config(data)
+        # Telegram status
+        from presence.core.secrets import get_secret
+        tg_token = get_secret("TELEGRAM_BOT_TOKEN", data)
+        tg_chat = get_secret("TELEGRAM_CHAT_ID", data)
+        tg_paired = bool(tg_token and tg_chat)
+        return render_template("student.html", page="student", plan=plan,
+                               schedule=schedule, today=today,
+                               total_events=len(events),
+                               cal_files=list(cal_dir.glob("*.ics")) if cal_dir.is_dir() else [],
+                               brief=brief,
+                               weekly=weekly,
+                               feeds=feeds,
+                               scholarships=scholarships,
+                               scout_config=scout_config,
+                               tg_paired=tg_paired)
+
+    @app.post("/student/upload")
+    def student_upload():
+        from presence.connectors.schedule_upload import (
+            upload_ics_file,
+            upload_pdf,
+            upload_url,
+        )
+        cal_dir = data / "calendars"
+
+        # URL input
+        url = request.form.get("calendar_url", "").strip()
+        if url:
+            result = upload_url(url, cal_dir, data_dir=data)
+            flash(result.message, "message" if result.ok else "error")
+            return redirect(url_for("student_plan"))
+
+        # File input
+        f = request.files.get("schedule_file")
+        if f is None or not f.filename:
+            flash("Choose a file or enter a calendar URL.", "error")
+            return redirect(url_for("student_plan"))
+
+        filename = f.filename.lower()
+        file_bytes = f.read()
+
+        if filename.endswith(".ics"):
+            result = upload_ics_file(file_bytes, f.filename, cal_dir)
+        elif filename.endswith(".pdf"):
+            result = upload_pdf(file_bytes, f.filename, cal_dir, data)
+        else:
+            flash("Unsupported file type. Please upload a .ics or .pdf file.", "error")
+            return redirect(url_for("student_plan"))
+
+        flash(result.message, "message" if result.ok else "error")
+        return redirect(url_for("student_plan"))
+
+    @app.post("/student/brief")
+    def student_brief():
+        from presence.cycle import run_student_brief
+        send = request.form.get("send") == "1"
+        brief, delivered = run_student_brief(data, send=send)
+        if delivered:
+            flash("daily brief sent to Telegram")
+        elif send:
+            flash("brief generated — Telegram is not paired, so it shows here instead", "error")
+        else:
+            flash("daily brief generated")
+        return redirect(url_for("student_plan"))
+
+    @app.post("/student/weekly")
+    def student_weekly():
+        from presence.cycle import run_student_weekly
+        send = request.form.get("send") == "1"
+        brief, delivered = run_student_weekly(data, send=send)
+        if delivered:
+            flash("weekly summary sent to Telegram")
+        elif send:
+            flash("weekly summary generated — Telegram not paired",
+                  "error")
+        else:
+            flash("weekly summary generated")
+        return redirect(url_for("student_plan"))
+
+    @app.post("/student/telegram/pair")
+    def student_telegram_pair():
+        token = request.form.get("tg_token", "").strip()
+        if not token:
+            flash("Please paste your bot token.", "error")
+            return redirect(url_for("student_plan"))
+        import urllib.request
+        try:
+            url = f"https://api.telegram.org/bot{token}/getUpdates"
+            req = urllib.request.Request(url)
+            with urllib.request.urlopen(req, timeout=10) as resp:
+                body = json.loads(resp.read())
+        except Exception:
+            flash("Invalid token or network error.", "error")
+            return redirect(url_for("student_plan"))
+        msgs = body.get("result", [])
+        chat_id = None
+        for u in reversed(msgs):
+            msg = u.get("message") or {}
+            if msg.get("chat", {}).get("type") == "private":
+                chat_id = str(msg["chat"]["id"])
+                break
+        if not chat_id:
+            flash("Send a message to your bot first, then try again.", "error")
+            return redirect(url_for("student_plan"))
+        _save_secrets_env(data, TELEGRAM_BOT_TOKEN=token,
+                          TELEGRAM_CHAT_ID=chat_id)
+        flash("Telegram paired!")
+        return redirect(url_for("student_plan"))
+
+    @app.post("/student/telegram/unpair")
+    def student_telegram_unpair():
+        _save_secrets_env(data, TELEGRAM_BOT_TOKEN="",
+                          TELEGRAM_CHAT_ID="")
+        flash("Telegram disconnected.")
+        return redirect(url_for("student_plan"))
+
+    @app.post("/student/feed/remove")
+    def student_feed_remove():
+        from presence.connectors.cal_feeds import remove_feed
+        url = request.form.get("feed_url", "").strip()
+        filename = request.form.get("feed_filename", "").strip()
+        if url:
+            remove_feed(data, url)
+        if filename:
+            ics_path = data / "calendars" / filename
+            if ics_path.exists():
+                ics_path.unlink()
+        flash("Feed removed.")
+        return redirect(url_for("student_plan"))
+
+    @app.post("/student/scholarship/add")
+    def student_scholarship_add():
+        from presence.agents.scholar_tracker import ScholarshipTracker
+        tracker = ScholarshipTracker(data / "scholarships.json")
+        name = request.form.get("scholarship_name", "").strip()
+        if not name:
+            flash("Please enter a scholarship name.", "error")
+            return redirect(url_for("student_plan"))
+        deadline = request.form.get("scholarship_deadline", "").strip()
+        time_val = request.form.get("scholarship_time", "").strip()
+        if deadline and time_val:
+            deadline = f"{deadline} {time_val}"
+        tracker.add(
+            name=name,
+            organization=request.form.get("scholarship_org", "PolyU").strip() or "PolyU",
+            kind=request.form.get("scholarship_kind", "scholarship").strip() or "scholarship",
+            deadline=deadline,
+            amount=request.form.get("scholarship_amount", "").strip(),
+            notes=request.form.get("scholarship_notes", "").strip(),
+            url=request.form.get("scholarship_url", "").strip(),
+        )
+        flash(f"Tracking: {name}")
+        return redirect(url_for("student_plan"))
+
+    @app.post("/student/scholarship/update")
+    def student_scholarship_update():
+        from presence.agents.scholar_tracker import ScholarshipTracker
+        tracker = ScholarshipTracker(data / "scholarships.json")
+        sid = request.form.get("scholarship_id", "").strip()
+        new_status = request.form.get("scholarship_status", "").strip()
+        if sid and new_status:
+            s = tracker.update(sid, status=new_status)
+            if s:
+                flash(f"{s.name} → {new_status.replace('_', ' ')}")
+        return redirect(url_for("student_plan"))
+
+    @app.post("/student/scholarship/remove")
+    def student_scholarship_remove():
+        from presence.agents.scholar_tracker import ScholarshipTracker
+        tracker = ScholarshipTracker(data / "scholarships.json")
+        sid = request.form.get("scholarship_id", "").strip()
+        tracker.remove(sid)
+        flash("Scholarship removed.")
+        return redirect(url_for("student_plan"))
+
+    @app.post("/student/scout")
+    def student_scout():
+        from presence.cycle import run_student_scout
+        added = run_student_scout(data)
+        if added:
+            flash(f"Scout found {added} new opportunit{'y' if added == 1 else 'ies'}")
+        else:
+            flash("No new opportunities found")
+        return redirect(url_for("student_plan"))
+
+    @app.post("/student/scout/feed")
+    def student_scout_add_feed():
+        from presence.agents.scout import load_scout_config, save_scout_config
+        url = request.form.get("feed_url", "").strip()
+        label = request.form.get("feed_label", "").strip()
+        kind = request.form.get("feed_kind", "").strip()
+        if not url:
+            flash("Please enter a feed URL.", "error")
+            return redirect(url_for("student_plan"))
+        config = load_scout_config(data)
+        # don't add duplicates
+        if any(f["url"] == url for f in config.rss_feeds):
+            flash("This feed is already added.", "error")
+            return redirect(url_for("student_plan"))
+        config.rss_feeds.append({"url": url, "label": label or url[:40], "kind": kind})
+        save_scout_config(data, config)
+        flash(f"Feed added: {label or url[:40]}")
+        return redirect(url_for("student_plan"))
+
+    @app.post("/student/scout/feed/remove")
+    def student_scout_remove_feed():
+        from presence.agents.scout import load_scout_config, save_scout_config
+        url = request.form.get("feed_url", "").strip()
+        config = load_scout_config(data)
+        config.rss_feeds = [f for f in config.rss_feeds if f.get("url") != url]
+        save_scout_config(data, config)
+        flash("Feed removed.")
+        return redirect(url_for("student_plan"))
+
+    @app.post("/student/scout/keywords")
+    def student_scout_keywords():
+        from presence.agents.scout import load_scout_config, save_scout_config
+        config = load_scout_config(data)
+        raw_include = request.form.get("keywords", "").strip()
+        raw_exclude = request.form.get("keywords_exclude", "").strip()
+        raw_locations = request.form.get("locations", "").strip()
+        config.keywords = [k.strip() for k in raw_include.split(",") if k.strip()]
+        config.keywords_exclude = [k.strip() for k in raw_exclude.split(",") if k.strip()]
+        config.locations = [k.strip() for k in raw_locations.split(",") if k.strip()]
+        save_scout_config(data, config)
+        flash("Scout keywords updated.")
+        return redirect(url_for("student_plan"))
 
     @app.get("/run")
     def run_page():

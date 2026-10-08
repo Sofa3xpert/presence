@@ -12,7 +12,7 @@
 * { box-sizing: border-box; }
 body { margin: 0; background: var(--mist); color: var(--soil); font-family: "Nunito Sans", "Trebuchet MS", "Helvetica Neue", sans-serif; font-size: 15px; line-height: 1.5; }
 header { display: flex; align-items: center; gap: 18px; padding: 14px 28px; background: var(--paper); border-bottom: 1px solid #d9ddd4; }
-header form.folder { margin-left: auto; align-items: center; gap: 8px; }
+header form.folder { align-items: center; gap: 8px; }
 button.link { background: none; color: var(--leaf); padding: 0; font-weight: 700; font-size: 12px; text-decoration: underline; }
 button.small { padding: 4px 10px; font-size: 12px; font-weight: 400; }
 button[disabled] { opacity: .45; cursor: not-allowed; }
@@ -25,6 +25,7 @@ header .brand { font-family: "Young Serif", Georgia, serif; font-size: 26px; dis
 header nav a { margin-right: 16px; color: var(--leaf); text-decoration: none; font-weight: 700; }
 header nav a.active { border-bottom: 2px solid var(--sprout); }
 main { max-width: 980px; margin: 0 auto; padding: 24px 28px 60px; }
+body.wide main { max-width: 1280px; }
 h1 { font-family: "Young Serif", Georgia, serif; font-weight: 400; font-size: 30px; margin: 6px 0 4px; }
 h2 { font-size: 18px; margin: 0 0 8px; display: flex; align-items: center; gap: 10px; }
 .lede { color: var(--muted); margin: 0 0 22px; }
@@ -178,3 +179,82 @@ table.models details summary { font-size: 12px; color: #a33; margin: 0; }
 .cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 14px; }
 .card { border: 1px solid var(--stone); background: var(--paper); padding: 12px 14px; }
 .card h3 { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; margin: 0 0 6px; }
+
+/* small button variant used in student pages */
+.btn-small { padding: 4px 10px; font-size: 12px; font-weight: 400; background: var(--paper); color: var(--muted); border: 1px solid var(--stone); cursor: pointer; }
+.btn-tab { padding: 6px 16px; font-size: 13px; font-weight: 700; background: var(--paper); color: var(--muted); border: 1px solid var(--stone); cursor: pointer; }
+.btn-tab.active { background: var(--leaf); color: #fff; border-color: var(--leaf); }
+
+/* student dashboard grid — two columns on desktop, single on mobile */
+.student-grid { display: flex; flex-direction: column; gap: 16px; }
+.sg-main { display: flex; flex-direction: column; gap: 16px; }
+.sg-side { display: flex; flex-direction: column; gap: 16px; }
+@media (min-width: 1024px) {
+  .student-grid { flex-direction: row; align-items: flex-start; }
+  .sg-main { flex: 3; min-width: 0; }
+  .sg-side { flex: 2; min-width: 320px; position: sticky; top: 16px; }
+}
+
+/* theme toggle button */
+.theme-toggle { background: none; border: 1px solid var(--stone); color: var(--soil); font-size: 18px; width: 34px; height: 34px; padding: 0; cursor: pointer; display: flex; align-items: center; justify-content: center; margin-left: auto; flex: none; }
+
+/* ── Dark mode ─────────────────────────────────────────────── */
+/* Shared dark overrides — applied by data-theme or system pref */
+[data-theme="dark"],
+html:not([data-theme]) .dark-auto { --placeholder: 1; }
+
+[data-theme="dark"] { --mist: #1a1a1a; --soil: #e0ddd8; --leaf: #4a9b6f; --sprout: #9bc53d; --signal: #e0a24a; --stone: #3a3a3a; --paper: #242424; --muted: #9a968f; }
+@media (prefers-color-scheme: dark) { html:not([data-theme]) { --mist: #1a1a1a; --soil: #e0ddd8; --leaf: #4a9b6f; --sprout: #9bc53d; --signal: #e0a24a; --stone: #3a3a3a; --paper: #242424; --muted: #9a968f; } }
+
+/* Force light when explicitly chosen */
+[data-theme="light"] { --mist:#f1f4ef; --soil:#2a2622; --leaf:#2f6b4f; --sprout:#9bc53d; --signal:#e0a24a; --stone:#c9c4ba; --paper:#ffffff; --muted:#7a766f; }
+
+/* Element overrides for dark — via attribute + media fallback */
+[data-theme="dark"] header,
+html:not([data-theme]) header { border-bottom-color: var(--stone); }
+[data-theme="dark"] header svg path { stroke: var(--soil); }
+
+[data-theme="dark"] input[type=text], [data-theme="dark"] input[type=password], [data-theme="dark"] input[type=url], [data-theme="dark"] input[type=number], [data-theme="dark"] input[type=time], [data-theme="dark"] input[type=date],
+[data-theme="dark"] select, [data-theme="dark"] textarea { background: var(--paper); color: var(--soil); border-color: var(--stone); }
+
+[data-theme="dark"] th, [data-theme="dark"] td { border-bottom-color: var(--stone); }
+[data-theme="dark"] .step { border-color: var(--stone); }
+[data-theme="dark"] pre.brief { border-color: var(--stone); background: var(--paper); }
+[data-theme="dark"] .flash { background: var(--paper); }
+[data-theme="dark"] button.quiet { background: var(--paper); }
+[data-theme="dark"] button.danger { background: var(--paper); color: #e66; border-color: #e66; }
+[data-theme="dark"] ul.checks li { border-bottom-color: var(--stone); }
+[data-theme="dark"] .note { border-bottom-color: var(--stone); }
+[data-theme="dark"] .qa { border-bottom-color: var(--stone); }
+[data-theme="dark"] .why-row { border-top-color: var(--stone); }
+[data-theme="dark"] .storycard { border-top-color: var(--stone); }
+[data-theme="dark"] a.button { background: var(--paper); }
+[data-theme="dark"] .chip { border-color: #2a5e3e; background: #1e3528; }
+[data-theme="dark"] .chip button:hover { background: #2a4a35; }
+[data-theme="dark"] .tagbar a.on { background: #1e3528; border-color: var(--leaf); }
+[data-theme="dark"] .story.use { border-color: var(--leaf); background: #1e3528; }
+[data-theme="dark"] .ask { background: var(--paper); }
+[data-theme="dark"] .where.local { border-color: #2a5e3e; }
+[data-theme="dark"] .where.cloud { background: #3a2e1a; }
+[data-theme="dark"] .where.yours { color: #c4a87a; border-color: #4a3e2e; }
+[data-theme="dark"] figure.qr img { background: #fff; }
+[data-theme="dark"] .cvcard .thumb img { background: #fff; }
+[data-theme="dark"] .cvcard .thumb .txt { background: var(--paper); border-color: var(--stone); }
+[data-theme="dark"] table.models tr.inuse td { background: #1e2e24; }
+[data-theme="dark"] table.models details summary { color: #e66; }
+[data-theme="dark"] .btn-small { background: var(--paper); }
+
+/* Media query fallback for users without JS / no toggle used */
+@media (prefers-color-scheme: dark) {
+  html:not([data-theme]) header svg path { stroke: #e0ddd8; }
+  html:not([data-theme]) input[type=text], html:not([data-theme]) input[type=password], html:not([data-theme]) input[type=url], html:not([data-theme]) input[type=number], html:not([data-theme]) input[type=time], html:not([data-theme]) input[type=date],
+  html:not([data-theme]) select, html:not([data-theme]) textarea { background: #242424; color: #e0ddd8; border-color: #3a3a3a; }
+  html:not([data-theme]) th, html:not([data-theme]) td { border-bottom-color: #3a3a3a; }
+  html:not([data-theme]) .step { border-color: #3a3a3a; }
+  html:not([data-theme]) pre.brief { border-color: #3a3a3a; background: #242424; }
+  html:not([data-theme]) .flash { background: #242424; }
+  html:not([data-theme]) button.quiet, html:not([data-theme]) button.danger { background: #242424; }
+  html:not([data-theme]) .btn-small { background: #242424; }
+  html:not([data-theme]) .chip { border-color: #2a5e3e; background: #1e3528; }
+  html:not([data-theme]) a.button { background: #242424; }
+}
