@@ -77,7 +77,7 @@ def test_brief_section(tmp_path):
     tracker.add(name="Hall Scholarship", deadline="2026-10-01", status="to_apply")
     lines = scholarship_brief_section(tracker, today=date(2026, 9, 29))
     assert len(lines) == 3  # header + 2 scholarships
-    assert "Scholarship deadlines (2):" in lines[0]
+    assert "Opportunity deadlines (2):" in lines[0]
     assert "Hall Scholarship" in lines[1]  # sorted by deadline — Oct 1 first
     assert "in 2 days" in lines[1]
     assert "Zou Xin AI Scholarship" in lines[2]

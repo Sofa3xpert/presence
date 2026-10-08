@@ -173,14 +173,14 @@ def _postings_to_opportunities(data: Path, config: Any) -> list[Any]:
     return opportunities
 
 
-def run_student_scout(data: Path, send: bool = False) -> tuple[str, bool]:
-    """Run the Opportunity Scout: fetch from RSS + job boards, filter, compose digest.
+def run_student_scout(data: Path) -> int:
+    """Run the Opportunity Scout: fetch from RSS + job boards, add new items to tracker.
 
-    Returns (digest_text, delivered).
+    Returns the number of new opportunities added.
     """
+    from presence.agents.scholar_tracker import ScholarshipTracker
     from presence.agents.scout import (
         SeenOpportunities,
-        compose_scout_digest,
         load_scout_config,
         matches_scout,
     )
@@ -188,6 +188,7 @@ def run_student_scout(data: Path, send: bool = False) -> tuple[str, bool]:
 
     config = load_scout_config(data)
     seen = SeenOpportunities(data / "seen_opportunities.json")
+    tracker = ScholarshipTracker(data / "scholarships.json")
 
     # 1. Fetch from RSS feeds
     rss_opps = fetch_all_feeds(config.rss_feeds)
@@ -195,9 +196,9 @@ def run_student_scout(data: Path, send: bool = False) -> tuple[str, bool]:
     # 2. Fetch from job board connectors (internships)
     board_opps = _postings_to_opportunities(data, config)
 
-    # 3. Combine, dedupe, filter
+    # 3. Combine, dedupe, filter, add to tracker
     all_opps = rss_opps + board_opps
-    new_opps = []
+    added = 0
     seen_keys: set[str] = set()
     for opp in all_opps:
         key = opp.key
@@ -205,26 +206,27 @@ def run_student_scout(data: Path, send: bool = False) -> tuple[str, bool]:
             continue
         if not matches_scout(opp, config):
             continue
+        # skip if already in tracker (by URL)
+        if tracker.has_url(opp.url):
+            seen_keys.add(key)
+            continue
         seen_keys.add(key)
-        new_opps.append(opp)
+        tracker.add(
+            name=opp.title,
+            organization=opp.organization,
+            kind=opp.kind,
+            url=opp.url,
+            deadline=opp.deadline,
+            notes=opp.description[:200] if opp.description else "",
+            source=opp.source,
+        )
+        added += 1
 
-    # 4. Mark as seen
-    if new_opps:
-        seen.mark([o.key for o in new_opps])
+    # Mark all as seen so we don't re-add next run
+    if seen_keys:
+        seen.mark(list(seen_keys))
 
-    # 5. Compose digest
-    digest = compose_scout_digest(new_opps, limit=config.max_results)
-    (data / "last_scout_digest.txt").write_text(digest)
-
-    # 6. Send via Telegram if requested
-    delivered = False
-    if send:
-        messenger = telegram_for(data)
-        if messenger is not None:
-            messenger.send(digest)
-            delivered = True
-
-    return digest, delivered
+    return added
 
 
 __all__ = ["ConsoleMessenger", "TelegramError", "keep_description", "run_cycle",

@@ -87,45 +87,152 @@
 </div>
 </section>
 
-<section class="step {{ 'done' if scholarships else 'todo' }}"><h2>Scholarship Tracker</h2>
-<p class="hint">Track scholarships you find on eScholar or elsewhere. Deadlines show up in your Daily Brief.</p>
-
-<form class="stack" method="post" action="/student/scholarship/add" style="max-width:500px">
-  <label>Scholarship name
-    <input type="text" name="scholarship_name" placeholder="Dept. of DS&AI Scholarship for Hall Residents" required>
-  </label>
-  <div style="display:flex;gap:12px">
-    <label style="flex:1">Organization
-      <input type="text" name="scholarship_org" value="PolyU" placeholder="PolyU">
-    </label>
-    <label style="flex:1">Amount
-      <input type="text" name="scholarship_amount" placeholder="HK$10,000">
-    </label>
-  </div>
-  <div style="display:flex;gap:12px">
-    <label style="flex:1">Deadline
-      <input type="date" name="scholarship_deadline">
-    </label>
-    <label style="flex:1">Link (optional)
-      <input type="text" name="scholarship_url" placeholder="https://...">
-    </label>
-  </div>
-  <label>Notes
-    <input type="text" name="scholarship_notes" placeholder="Need hall residence proof, GPA 3.0+">
-  </label>
-  <div><button type="submit">Add scholarship</button></div>
+<section class="step {{ 'done' if tg_paired else 'todo' }}"><h2>Telegram</h2>
+{% if tg_paired %}
+<p class="hint">Connected — your daily brief will be sent here every morning.</p>
+<form method="post" action="/student/telegram/unpair" style="margin-top:8px">
+  <button type="submit" class="btn-small">Disconnect Telegram</button>
 </form>
+{% else %}
+<p class="hint">Connect a Telegram bot to receive your daily brief every morning.</p>
+<details open style="max-width:500px">
+  <summary style="cursor:pointer;font-weight:bold">How to connect</summary>
+  <ol style="margin-top:8px;padding-left:20px">
+    <li>Open Telegram, search for <strong>@BotFather</strong></li>
+    <li>Send <code>/newbot</code>, pick a name and username</li>
+    <li>Copy the <strong>token</strong> BotFather gives you</li>
+    <li>Send any message to your new bot (e.g. "hi")</li>
+    <li>Paste the token below and click <strong>Pair</strong></li>
+  </ol>
+</details>
+<form class="stack" method="post" action="/student/telegram/pair" style="max-width:500px;margin-top:8px">
+  <label>Bot token
+    <input type="text" name="tg_token" placeholder="123456789:ABCdefGHIjklMNOpqrsTUVwxyz" required>
+  </label>
+  <div><button type="submit">Pair</button></div>
+</form>
+{% endif %}
+</section>
+
+<section class="step {{ 'done' if scholarships else 'todo' }}"><h2>Opportunities</h2>
+<p class="hint">Track scholarships, internships, events. Add manually or let the Scout find them via RSS feeds. Deadlines show up in your Daily Brief.</p>
+
+<details style="max-width:500px">
+  <summary style="cursor:pointer;font-weight:bold">Add manually</summary>
+  <form class="stack" method="post" action="/student/scholarship/add" style="margin-top:8px">
+    <label>Name
+      <input type="text" name="scholarship_name" placeholder="Dept. of DS&AI Scholarship for Hall Residents" required>
+    </label>
+    <div style="display:flex;gap:12px">
+      <label style="flex:1">Organization
+        <input type="text" name="scholarship_org" value="PolyU" placeholder="PolyU">
+      </label>
+      <label style="flex:1">Kind
+        <select name="scholarship_kind">
+          <option value="scholarship">Scholarship</option>
+          <option value="internship">Internship</option>
+          <option value="event">Event</option>
+          <option value="mentorship">Mentorship</option>
+          <option value="other">Other</option>
+        </select>
+      </label>
+    </div>
+    <div style="display:flex;gap:12px">
+      <label style="flex:1">Deadline
+        <input type="date" name="scholarship_deadline">
+      </label>
+      <label style="flex:0.7">Time
+        <input type="time" name="scholarship_time">
+      </label>
+      <label style="flex:1">Amount
+        <input type="text" name="scholarship_amount" placeholder="HK$10,000">
+      </label>
+    </div>
+    <div style="display:flex;gap:12px">
+      <label style="flex:1">Link (optional)
+        <input type="text" name="scholarship_url" placeholder="https://...">
+      </label>
+    </div>
+    <label>Notes
+      <input type="text" name="scholarship_notes" placeholder="Need hall residence proof, GPA 3.0+">
+    </label>
+    <div><button type="submit">Add</button></div>
+  </form>
+</details>
+
+<details style="max-width:500px;margin-top:12px">
+  <summary style="cursor:pointer;font-weight:bold">RSS Feeds &amp; Scout settings</summary>
+  <p class="hint" style="margin-top:8px">Add RSS/Atom feeds — the Scout checks them and adds new opportunities to the table below.</p>
+  <form class="stack" method="post" action="/student/scout/feed">
+    <div style="display:flex;gap:12px">
+      <label style="flex:2">Feed URL
+        <input type="text" name="feed_url" placeholder="https://example.com/opportunities.rss" required>
+      </label>
+      <label style="flex:1">Label
+        <input type="text" name="feed_label" placeholder="PolyU Careers">
+      </label>
+      <label style="flex:1">Kind
+        <select name="feed_kind">
+          <option value="">Auto-detect</option>
+          <option value="internship">Internship</option>
+          <option value="scholarship">Scholarship</option>
+          <option value="event">Event</option>
+          <option value="mentorship">Mentorship</option>
+        </select>
+      </label>
+    </div>
+    <div><button type="submit">Add feed</button></div>
+  </form>
+  {% if scout_config.rss_feeds %}
+  <table style="margin-top:8px">
+    <tr><th>Feed</th><th>Kind</th><th></th></tr>
+    {% for f in scout_config.rss_feeds %}
+    <tr>
+      <td>{{ f.label or f.url[:40] }}</td>
+      <td>{{ f.kind or 'auto' }}</td>
+      <td>
+        <form method="post" action="/student/scout/feed/remove" style="margin:0">
+          <input type="hidden" name="feed_url" value="{{ f.url }}">
+          <button type="submit" class="btn-small">Remove</button>
+        </form>
+      </td>
+    </tr>
+    {% endfor %}
+  </table>
+  {% endif %}
+  <h4 style="margin-top:12px">Keywords</h4>
+  <form class="stack" method="post" action="/student/scout/keywords">
+    <label>Include (comma-separated)
+      <input type="text" name="keywords" value="{{ scout_config.keywords | join(', ') }}" placeholder="intern, graduate, student">
+    </label>
+    <label>Exclude (comma-separated)
+      <input type="text" name="keywords_exclude" value="{{ scout_config.keywords_exclude | join(', ') }}" placeholder="senior, manager">
+    </label>
+    <label>Locations (comma-separated, leave empty for any)
+      <input type="text" name="locations" value="{{ scout_config.locations | join(', ') }}" placeholder="Hong Kong, Remote">
+    </label>
+    <div><button type="submit">Save keywords</button></div>
+  </form>
+</details>
+
+<div style="margin-top:12px">
+  <form method="post" action="/student/scout" style="display:inline">
+    <button type="submit">Run Scout</button>
+  </form>
+</div>
 
 {% if scholarships %}
 <table style="margin-top:16px">
-  <tr><th>Scholarship</th><th>Deadline</th><th>Status</th><th></th><th></th></tr>
+  <tr><th>Opportunity</th><th>Kind</th><th>Deadline</th><th>Status</th><th></th></tr>
   {% for s in scholarships %}
   <tr>
     <td>
       {% if s.url %}<a href="{{ s.url }}" target="_blank">{{ s.name }}</a>{% else %}{{ s.name }}{% endif %}
+      {% if s.organization and s.organization != 'PolyU' %}<br><span class="hint">{{ s.organization }}</span>{% endif %}
       {% if s.amount %}<br><span class="hint">{{ s.amount }}</span>{% endif %}
-      {% if s.notes %}<br><span class="hint">{{ s.notes }}</span>{% endif %}
+      {% if s.notes %}<br><span class="hint">{{ s.notes[:80] }}</span>{% endif %}
     </td>
+    <td>{{ s.kind or 'other' }}</td>
     <td class="mono">{{ s.deadline or '—' }}</td>
     <td>
       <form method="post" action="/student/scholarship/update" style="margin:0">
@@ -149,80 +256,6 @@
   {% endfor %}
 </table>
 {% endif %}
-</section>
-
-<section class="step {{ 'done' if scout_digest else 'todo' }}"><h2>Opportunity Scout</h2>
-<p class="hint">Finds internships, scholarships, events, and mentorships from RSS feeds and job boards.</p>
-
-<h3>Search Keywords</h3>
-<form class="stack" method="post" action="/student/scout/keywords" style="max-width:500px">
-  <label>Include (comma-separated)
-    <input type="text" name="keywords" value="{{ scout_config.keywords | join(', ') }}" placeholder="intern, graduate, student">
-  </label>
-  <label>Exclude (comma-separated)
-    <input type="text" name="keywords_exclude" value="{{ scout_config.keywords_exclude | join(', ') }}" placeholder="senior, manager">
-  </label>
-  <label>Locations (comma-separated, leave empty for any)
-    <input type="text" name="locations" value="{{ scout_config.locations | join(', ') }}" placeholder="Hong Kong, Remote">
-  </label>
-  <div><button type="submit">Save keywords</button></div>
-</form>
-
-<h3 style="margin-top:20px">RSS Feeds</h3>
-<p class="hint">Add RSS/Atom feeds from scholarship sites, career pages, or event boards.</p>
-<form class="stack" method="post" action="/student/scout/feed" style="max-width:500px">
-  <label>Feed URL
-    <input type="text" name="feed_url" placeholder="https://example.com/opportunities.rss" required>
-  </label>
-  <div style="display:flex;gap:12px">
-    <label style="flex:1">Label
-      <input type="text" name="feed_label" placeholder="PolyU Careers">
-    </label>
-    <label style="flex:1">Kind
-      <select name="feed_kind">
-        <option value="">Auto-detect</option>
-        <option value="internship">Internship</option>
-        <option value="scholarship">Scholarship</option>
-        <option value="event">Event</option>
-        <option value="mentorship">Mentorship</option>
-      </select>
-    </label>
-  </div>
-  <div><button type="submit">Add feed</button></div>
-</form>
-
-{% if scout_config.rss_feeds %}
-<table style="max-width:500px;margin-top:12px">
-  <tr><th>Feed</th><th>Kind</th><th></th></tr>
-  {% for f in scout_config.rss_feeds %}
-  <tr>
-    <td>{{ f.label or f.url[:40] }}</td>
-    <td>{{ f.kind or 'auto' }}</td>
-    <td>
-      <form method="post" action="/student/scout/feed/remove" style="margin:0">
-        <input type="hidden" name="feed_url" value="{{ f.url }}">
-        <button type="submit" class="btn-small">Remove</button>
-      </form>
-    </td>
-  </tr>
-  {% endfor %}
-</table>
-{% endif %}
-
-{% if scout_digest %}
-<h3 style="margin-top:20px">Latest Digest</h3>
-<pre class="brief">{{ scout_digest }}</pre>
-{% endif %}
-
-<div style="display:flex;gap:12px;margin-top:12px">
-<form method="post" action="/student/scout">
-  <button type="submit">Run Scout</button>
-</form>
-<form method="post" action="/student/scout">
-  <input type="hidden" name="send" value="1">
-  <button type="submit">Run Scout &amp; send to Telegram</button>
-</form>
-</div>
 </section>
 
 <section class="step todo"><h2>What you get</h2>
@@ -282,14 +315,8 @@
   </tr>
   <tr>
     <td>4</td>
-    <td>Opportunity Scout</td>
-    <td>Find internships, scholarships, mentorships, student events</td>
-    <td><span class="pill on">done</span></td>
-  </tr>
-  <tr>
-    <td>5</td>
-    <td>Scholarship Tracker</td>
-    <td>Track scholarships, deadlines show up in Daily Brief</td>
+    <td>Opportunities</td>
+    <td>Scout + track internships, scholarships, events; deadlines in Daily Brief</td>
     <td><span class="pill on">done</span></td>
   </tr>
 </table>

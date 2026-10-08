@@ -1,8 +1,8 @@
-"""Scholarship Tracker — track scholarships you're applying to.
+"""Opportunity Tracker — track scholarships, internships, events you're applying to.
 
-A simple JSON-backed list of scholarships with deadlines and statuses.
-Designed for a student who checks eScholar (or any portal) and logs
-what they find here, so Presence can remind them about deadlines.
+A simple JSON-backed list of opportunities with deadlines and statuses.
+Items come from two places: added manually by the student, or found
+automatically by the Scout (RSS feeds, job boards).
 """
 
 from __future__ import annotations
@@ -15,20 +15,33 @@ from pathlib import Path
 from pydantic import BaseModel, Field
 
 STATUSES = ("to_apply", "applied", "won", "rejected", "expired")
+
+
+def _parse_deadline_date(deadline: str) -> date | None:
+    """Extract the date part from a deadline like '2026-10-08' or '2026-10-08 16:00'."""
+    try:
+        return date.fromisoformat(deadline.split()[0])
+    except (ValueError, IndexError):
+        return None
 OPEN_STATUSES = ("to_apply", "applied")
 
 
+KINDS = ("scholarship", "internship", "event", "mentorship", "other")
+
+
 class Scholarship(BaseModel):
-    """One scholarship the student is tracking."""
+    """One opportunity the student is tracking."""
 
     id: str = Field(default_factory=lambda: uuid.uuid4().hex[:8])
     name: str
     organization: str = "PolyU"
+    kind: str = "scholarship"   # one of KINDS
     deadline: str = ""          # ISO date
     amount: str = ""            # e.g. "HK$10,000" — free text
     status: str = "to_apply"    # one of STATUSES
     notes: str = ""
     url: str = ""
+    source: str = "manual"      # "manual" or "rss:..." or "greenhouse" etc.
     added: str = Field(default_factory=lambda: date.today().isoformat())
 
 
@@ -58,6 +71,16 @@ class ScholarshipTracker:
             if s.id == scholarship_id:
                 return s
         return None
+
+    def has_url(self, url: str) -> bool:
+        """Check if an opportunity with this URL already exists."""
+        if not url:
+            return False
+        normalized = url.strip().rstrip("/").lower()
+        return any(
+            s.url.strip().rstrip("/").lower() == normalized
+            for s in self._items if s.url
+        )
 
     def add(self, **kwargs) -> Scholarship:
         s = Scholarship(**kwargs)
@@ -91,9 +114,8 @@ class ScholarshipTracker:
         for s in self._items:
             if s.status != "to_apply" or not s.deadline:
                 continue
-            try:
-                dl = date.fromisoformat(s.deadline)
-            except ValueError:
+            dl = _parse_deadline_date(s.deadline)
+            if dl is None:
                 continue
             if today <= dl <= cutoff:
                 result.append(s)
@@ -106,9 +128,8 @@ class ScholarshipTracker:
         for s in self._items:
             if s.status != "to_apply" or not s.deadline:
                 continue
-            try:
-                dl = date.fromisoformat(s.deadline)
-            except ValueError:
+            dl = _parse_deadline_date(s.deadline)
+            if dl is None:
                 continue
             if dl < today:
                 s.status = "expired"
@@ -126,18 +147,21 @@ def scholarship_brief_section(tracker: ScholarshipTracker, today: date | None = 
     if not upcoming:
         return []
 
-    lines = [f"Scholarship deadlines ({len(upcoming)}):"]
+    lines = [f"Opportunity deadlines ({len(upcoming)}):"]
     for s in upcoming:
-        try:
-            dl = date.fromisoformat(s.deadline)
-            delta = (dl - today).days
-        except ValueError:
+        dl = _parse_deadline_date(s.deadline)
+        if dl is None:
             continue
+        delta = (dl - today).days
+        # extract time if present (e.g. "2026-10-08 16:00")
+        time_str = ""
+        if " " in s.deadline:
+            time_str = f" at {s.deadline.split()[1]}"
         if delta == 0:
-            urgency = "TODAY"
+            urgency = f"TODAY{time_str}"
         elif delta == 1:
-            urgency = "tomorrow"
+            urgency = f"tomorrow{time_str}"
         else:
-            urgency = f"in {delta} days ({dl:%a} {dl.day} {dl:%b})"
+            urgency = f"in {delta} days ({dl:%a} {dl.day} {dl:%b}){time_str}"
         lines.append(f"  - {s.name} — {urgency}")
     return lines

@@ -264,6 +264,26 @@ def _state(data: Path) -> dict[str, Any]:
     }
 
 
+def _save_secrets_env(data: Path, **updates: str) -> None:
+    """Update key=value pairs in secrets.env, preserving comments."""
+    path = data / "secrets.env"
+    lines: list[str] = []
+    if path.exists():
+        lines = path.read_text().splitlines()
+    written: set[str] = set()
+    for i, line in enumerate(lines):
+        stripped = line.strip()
+        if stripped and not stripped.startswith("#") and "=" in stripped:
+            key = stripped.split("=", 1)[0].strip()
+            if key in updates:
+                lines[i] = f"{key}={updates[key]}"
+                written.add(key)
+    for key, value in updates.items():
+        if key not in written:
+            lines.append(f"{key}={value}")
+    path.write_text("\n".join(lines) + "\n")
+
+
 def create_app(data: Path) -> Flask:
     data.mkdir(parents=True, exist_ok=True)
     app = Flask(__name__)
@@ -1511,11 +1531,14 @@ def create_app(data: Path) -> Flask:
         scholar_tracker = ScholarshipTracker(data / "scholarships.json")
         scholar_tracker.expired_check()
         scholarships = scholar_tracker.all()
-        # Scout data
+        # Scout config
         from presence.agents.scout import load_scout_config
         scout_config = load_scout_config(data)
-        scout_file = data / "last_scout_digest.txt"
-        scout_digest = scout_file.read_text() if scout_file.exists() else ""
+        # Telegram status
+        from presence.core.secrets import get_secret
+        tg_token = get_secret("TELEGRAM_BOT_TOKEN", data)
+        tg_chat = get_secret("TELEGRAM_CHAT_ID", data)
+        tg_paired = bool(tg_token and tg_chat)
         return render_template("student.html", page="student", plan=plan,
                                schedule=schedule, today=today,
                                total_events=len(events),
@@ -1524,7 +1547,7 @@ def create_app(data: Path) -> Flask:
                                feeds=feeds,
                                scholarships=scholarships,
                                scout_config=scout_config,
-                               scout_digest=scout_digest)
+                               tg_paired=tg_paired)
 
     @app.post("/student/upload")
     def student_upload():
@@ -1575,6 +1598,43 @@ def create_app(data: Path) -> Flask:
             flash("daily brief generated")
         return redirect(url_for("student_plan"))
 
+    @app.post("/student/telegram/pair")
+    def student_telegram_pair():
+        token = request.form.get("tg_token", "").strip()
+        if not token:
+            flash("Please paste your bot token.", "error")
+            return redirect(url_for("student_plan"))
+        import urllib.request
+        try:
+            url = f"https://api.telegram.org/bot{token}/getUpdates"
+            req = urllib.request.Request(url)
+            with urllib.request.urlopen(req, timeout=10) as resp:
+                body = json.loads(resp.read())
+        except Exception:
+            flash("Invalid token or network error.", "error")
+            return redirect(url_for("student_plan"))
+        msgs = body.get("result", [])
+        chat_id = None
+        for u in reversed(msgs):
+            msg = u.get("message") or {}
+            if msg.get("chat", {}).get("type") == "private":
+                chat_id = str(msg["chat"]["id"])
+                break
+        if not chat_id:
+            flash("Send a message to your bot first, then try again.", "error")
+            return redirect(url_for("student_plan"))
+        _save_secrets_env(data, TELEGRAM_BOT_TOKEN=token,
+                          TELEGRAM_CHAT_ID=chat_id)
+        flash("Telegram paired!")
+        return redirect(url_for("student_plan"))
+
+    @app.post("/student/telegram/unpair")
+    def student_telegram_unpair():
+        _save_secrets_env(data, TELEGRAM_BOT_TOKEN="",
+                          TELEGRAM_CHAT_ID="")
+        flash("Telegram disconnected.")
+        return redirect(url_for("student_plan"))
+
     @app.post("/student/feed/remove")
     def student_feed_remove():
         from presence.connectors.cal_feeds import remove_feed
@@ -1597,10 +1657,15 @@ def create_app(data: Path) -> Flask:
         if not name:
             flash("Please enter a scholarship name.", "error")
             return redirect(url_for("student_plan"))
+        deadline = request.form.get("scholarship_deadline", "").strip()
+        time_val = request.form.get("scholarship_time", "").strip()
+        if deadline and time_val:
+            deadline = f"{deadline} {time_val}"
         tracker.add(
             name=name,
             organization=request.form.get("scholarship_org", "PolyU").strip() or "PolyU",
-            deadline=request.form.get("scholarship_deadline", "").strip(),
+            kind=request.form.get("scholarship_kind", "scholarship").strip() or "scholarship",
+            deadline=deadline,
             amount=request.form.get("scholarship_amount", "").strip(),
             notes=request.form.get("scholarship_notes", "").strip(),
             url=request.form.get("scholarship_url", "").strip(),
@@ -1632,14 +1697,11 @@ def create_app(data: Path) -> Flask:
     @app.post("/student/scout")
     def student_scout():
         from presence.cycle import run_student_scout
-        send = request.form.get("send") == "1"
-        digest, delivered = run_student_scout(data, send=send)
-        if delivered:
-            flash("Scout digest sent to Telegram")
-        elif send:
-            flash("Telegram not paired — showing digest here", "error")
+        added = run_student_scout(data)
+        if added:
+            flash(f"Scout found {added} new opportunit{'y' if added == 1 else 'ies'}")
         else:
-            flash("Scout digest generated")
+            flash("No new opportunities found")
         return redirect(url_for("student_plan"))
 
     @app.post("/student/scout/feed")
