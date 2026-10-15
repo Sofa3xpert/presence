@@ -2,8 +2,9 @@
 # Send the student daily brief via Telegram.
 # Runs via crontab every morning at 7:00 HKT.
 # On Fridays, also sends the weekly summary.
-cd /Users/petrbaldakov/DEV/presence
-/Users/petrbaldakov/DEV/presence/.venv/bin/python -c "
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+cd "$SCRIPT_DIR"
+"$SCRIPT_DIR/.venv/bin/python" -c "
 from datetime import date
 from pathlib import Path
 from presence.cycle import run_student_brief, run_student_weekly

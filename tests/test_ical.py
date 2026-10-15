@@ -182,7 +182,7 @@ BEGIN:VEVENT
 DTSTART:20261005T170000
 DTEND:20261005T190000
 SUMMARY:Math Worksheet
-DESCRIPTION:https://canvas.polyu.edu.hk/courses/123/assignments/456
+DESCRIPTION:https://canvas.example.com/courses/123/assignments/456
 END:VEVENT
 END:VCALENDAR
 """

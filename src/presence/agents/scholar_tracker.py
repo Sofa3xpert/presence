@@ -34,7 +34,7 @@ class Scholarship(BaseModel):
 
     id: str = Field(default_factory=lambda: uuid.uuid4().hex[:8])
     name: str
-    organization: str = "PolyU"
+    organization: str = "My University"
     kind: str = "scholarship"   # one of KINDS
     deadline: str = ""          # ISO date
     amount: str = ""            # e.g. "HK$10,000" — free text

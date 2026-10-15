@@ -42,7 +42,7 @@
     </label>
     <div style="display:flex;gap:12px">
       <label style="flex:1">Organization
-        <input type="text" name="scholarship_org" value="PolyU" placeholder="PolyU">
+        <input type="text" name="scholarship_org" value="My University" placeholder="My University">
       </label>
       <label style="flex:1">Kind
         <select name="scholarship_kind">
@@ -86,7 +86,7 @@
         <input type="text" name="feed_url" placeholder="https://example.com/opportunities.rss" required>
       </label>
       <label style="flex:1">Label
-        <input type="text" name="feed_label" placeholder="PolyU Careers">
+        <input type="text" name="feed_label" placeholder="University Careers">
       </label>
       <label style="flex:1">Kind
         <select name="feed_kind">
@@ -146,7 +146,7 @@
   <tr>
     <td>
       {% if s.url %}<a href="{{ s.url }}" target="_blank">{{ s.name }}</a>{% else %}{{ s.name }}{% endif %}
-      {% if s.organization and s.organization != 'PolyU' %}<br><span class="hint">{{ s.organization }}</span>{% endif %}
+      {% if s.organization and s.organization != 'My University' %}<br><span class="hint">{{ s.organization }}</span>{% endif %}
       {% if s.amount %}<br><span class="hint">{{ s.amount }}</span>{% endif %}
       {% if s.notes %}<br><span class="hint">{{ s.notes[:80] }}</span>{% endif %}
     </td>

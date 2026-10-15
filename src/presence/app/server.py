@@ -1680,7 +1680,10 @@ def create_app(data: Path) -> Flask:
             deadline = f"{deadline} {time_val}"
         tracker.add(
             name=name,
-            organization=request.form.get("scholarship_org", "PolyU").strip() or "PolyU",
+            organization=(
+                request.form.get("scholarship_org", "My University").strip()
+                or "My University"
+            ),
             kind=request.form.get("scholarship_kind", "scholarship").strip() or "scholarship",
             deadline=deadline,
             amount=request.form.get("scholarship_amount", "").strip(),

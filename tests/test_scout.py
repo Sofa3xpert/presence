@@ -103,7 +103,7 @@ def test_digest_with_opportunities():
                     url="https://google.com/intern"),
         Opportunity(title="HK Scholarship", kind="scholarship",
                     deadline="2026-10-15"),
-        Opportunity(title="Career Fair", kind="event", location="PolyU"),
+        Opportunity(title="Career Fair", kind="event", location="Main Campus"),
     ]
     digest = compose_scout_digest(opps, today=date(2026, 9, 29))
     assert "3 new opportunities" in digest
