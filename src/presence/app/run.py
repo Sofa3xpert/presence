@@ -21,7 +21,7 @@ import requests
 
 from presence.core.config import ConfigError, load_app, load_profile, load_sources
 from presence.core.scheduler import Job, Scheduler
-from presence.cycle import run_cycle
+from presence.cycle import run_cycle, run_student_brief
 
 PORTS = range(8790, 8800)
 DEFAULT_AT = "08:00"
@@ -119,12 +119,36 @@ def scout_at(data: Path) -> str:
 
 # -------------------------------------------------------------- scheduler
 
+def student_brief_at(data: Path) -> str:
+    """The daily slot for the student brief — 30 min before the main cycle."""
+    try:
+        at = scout_at(data)
+        hour, minute = (int(x) for x in at.split(":"))
+        # 30 minutes earlier; wrap around midnight
+        total = hour * 60 + minute - 30
+        if total < 0:
+            total += 24 * 60
+        return f"{total // 60:02d}:{total % 60:02d}"
+    except Exception:
+        return "07:30"
+
+
+def _student_calendar_exists(data: Path) -> bool:
+    cal_dir = data / "calendars"
+    return cal_dir.is_dir() and any(cal_dir.glob("*.ics"))
+
+
 def build_scheduler(data: Path, clock: Callable[[], datetime] = datetime.now) -> Scheduler:
     async def cycle() -> None:
         await asyncio.to_thread(run_cycle, data, True)
 
-    return Scheduler([Job("cycle", at=scout_at(data), run=cycle)], data / "scheduler.json",
-                     clock=clock)
+    async def student_brief() -> None:
+        await asyncio.to_thread(run_student_brief, data, True)
+
+    jobs = [Job("cycle", at=scout_at(data), run=cycle)]
+    if _student_calendar_exists(data):
+        jobs.append(Job("student_brief", at=student_brief_at(data), run=student_brief))
+    return Scheduler(jobs, data / "scheduler.json", clock=clock)
 
 
 async def tick(data: Path, scheduler: Scheduler) -> list[str]:

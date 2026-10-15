@@ -2,8 +2,10 @@
 
 from __future__ import annotations
 
+import logging
 from datetime import date
 from pathlib import Path
+from typing import Any
 
 import yaml
 
@@ -14,6 +16,8 @@ from presence.core.config import SourceEntry, load_profile, load_search, load_so
 from presence.core.secrets import get_secret
 from presence.tracker import Tracker
 from presence.tracker.conventions import link_key
+
+log = logging.getLogger("presence.cycle")
 
 
 def telegram_for(data: Path) -> TelegramMessenger | None:
@@ -95,5 +99,165 @@ def run_cycle(data: Path, send: bool = False) -> tuple[str, dict[str, str], bool
     return brief, errors, delivered
 
 
+def run_student_brief(data: Path, send: bool = False) -> tuple[str, bool]:
+    """Compose the student daily brief and optionally send via Telegram.
+
+    Returns (brief_text, delivered).
+    """
+    from presence.agents.student_brief import compose_student_brief
+    from presence.connectors.cal_feeds import refresh_all
+
+    # refresh URL-based calendars (Canvas, etc.) before composing
+    refresh_all(data)
+
+    cal_dir = data / "calendars"
+
+    # scholarship deadline reminders
+    from presence.agents.scholar_tracker import ScholarshipTracker, scholarship_brief_section
+    scholar_tracker = ScholarshipTracker(data / "scholarships.json")
+    scholarship_lines = scholarship_brief_section(scholar_tracker)
+
+    brief = compose_student_brief(cal_dir, scholarship_lines=scholarship_lines)
+    (data / "last_student_brief.txt").write_text(brief)
+    delivered = False
+    if send:
+        messenger = telegram_for(data)
+        if messenger is not None:
+            messenger.send(brief)
+            delivered = True
+    return brief, delivered
+
+
+def run_student_weekly(data: Path, send: bool = False) -> tuple[str, bool]:
+    """Compose the weekly summary and optionally send via Telegram.
+
+    Returns (brief_text, delivered).
+    """
+    from presence.agents.student_brief import compose_weekly_summary
+    from presence.connectors.cal_feeds import refresh_all
+
+    # refresh URL-based calendars (Canvas, etc.) before composing
+    refresh_all(data)
+
+    cal_dir = data / "calendars"
+
+    # scholarship deadline reminders
+    from presence.agents.scholar_tracker import ScholarshipTracker, scholarship_brief_section
+    scholar_tracker = ScholarshipTracker(data / "scholarships.json")
+    scholarship_lines = scholarship_brief_section(scholar_tracker)
+
+    brief = compose_weekly_summary(cal_dir, scholarship_lines=scholarship_lines)
+    (data / "last_student_weekly.txt").write_text(brief)
+    delivered = False
+    if send:
+        messenger = telegram_for(data)
+        if messenger is not None:
+            messenger.send(brief)
+            delivered = True
+    return brief, delivered
+
+
+def _postings_to_opportunities(data: Path, config: Any) -> list[Any]:
+    """Reuse existing job board connectors to find internships.
+
+    Takes the user's configured sources (Greenhouse, Lever, etc.) and converts
+    Postings that match scout keywords into Opportunity objects.
+    """
+    from presence.agents.scout import Opportunity
+    from presence.core.config import load_sources
+
+    try:
+        sources = load_sources(data)
+    except Exception:
+        return []
+
+    if not sources:
+        return []
+
+    from presence.connectors.base import ConnectorError, create
+
+    opportunities: list[Any] = []
+    for src in sources:
+        if not src.enabled:
+            continue
+        try:
+            conn = create(src.provider)
+            postings = conn.fetch(src)
+        except ConnectorError as exc:
+            log.warning("Scout: board source %s failed: %s", src.id, exc)
+            continue
+        for p in postings:
+            # only keep postings that look like student opportunities
+            text = f"{p.title} {p.description}".lower()
+            if any(kw.lower() in text for kw in config.keywords):
+                opportunities.append(Opportunity(
+                    title=p.title,
+                    organization=p.company,
+                    kind="internship",
+                    url=p.url,
+                    location=p.location,
+                    source=p.source,
+                    found_date=date.today().isoformat(),
+                ))
+    return opportunities
+
+
+def run_student_scout(data: Path) -> int:
+    """Run the Opportunity Scout: fetch from RSS + job boards, add new items to tracker.
+
+    Returns the number of new opportunities added.
+    """
+    from presence.agents.scholar_tracker import ScholarshipTracker
+    from presence.agents.scout import (
+        SeenOpportunities,
+        load_scout_config,
+        matches_scout,
+    )
+    from presence.connectors.rss import fetch_all_feeds
+
+    config = load_scout_config(data)
+    seen = SeenOpportunities(data / "seen_opportunities.json")
+    tracker = ScholarshipTracker(data / "scholarships.json")
+
+    # 1. Fetch from RSS feeds
+    rss_opps = fetch_all_feeds(config.rss_feeds)
+
+    # 2. Fetch from job board connectors (internships)
+    board_opps = _postings_to_opportunities(data, config)
+
+    # 3. Combine, dedupe, filter, add to tracker
+    all_opps = rss_opps + board_opps
+    added = 0
+    seen_keys: set[str] = set()
+    for opp in all_opps:
+        key = opp.key
+        if key in seen_keys or seen.is_seen(key):
+            continue
+        if not matches_scout(opp, config):
+            continue
+        # skip if already in tracker (by URL)
+        if tracker.has_url(opp.url):
+            seen_keys.add(key)
+            continue
+        seen_keys.add(key)
+        tracker.add(
+            name=opp.title,
+            organization=opp.organization,
+            kind=opp.kind,
+            url=opp.url,
+            deadline=opp.deadline,
+            notes=opp.description[:200] if opp.description else "",
+            source=opp.source,
+        )
+        added += 1
+
+    # Mark all as seen so we don't re-add next run
+    if seen_keys:
+        seen.mark(list(seen_keys))
+
+    return added
+
+
 __all__ = ["ConsoleMessenger", "TelegramError", "keep_description", "run_cycle",
+           "run_student_brief", "run_student_scout", "run_student_weekly",
            "sheet_sync_if_configured", "telegram_for"]
